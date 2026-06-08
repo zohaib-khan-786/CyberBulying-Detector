@@ -1,0 +1,37 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+
+# Secrets
+.env
+*.key
+*.pem
+
+# Trained models (large binaries)
+backend/models/saved_models/*.pkl
+backend/models/saved_models/*.pt
+backend/models/saved_models/*.bin
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Data
+data/
+reports/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

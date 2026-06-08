@@ -1,0 +1,38 @@
+# Web framework
+flask==3.0.3
+flask-cors==4.0.1
+gunicorn==22.0.0
+
+# Config
+python-dotenv==1.0.1
+
+# Database (SQLAlchemy + drivers)
+sqlalchemy==2.0.30
+# Uncomment the driver you need:
+# mysql-connector-python==8.4.0        # MySQL
+# psycopg2-binary==2.9.9               # PostgreSQL
+# (SQLite is built into Python — no driver needed for local dev)
+
+# ML — classical (default stack)
+scikit-learn==1.4.2
+numpy==1.26.4
+pandas==2.2.2
+
+# ML — transformer (required when USE_TRANSFORMER=true)
+torch==2.3.0
+transformers==4.41.2
+tokenizers==0.19.1
+
+# Async tasks
+celery==5.4.0
+redis==5.0.6
+
+# Auth
+PyJWT>=2.8.0
+bcrypt>=4.1.0
+
+# Multilingual detection
+langdetect>=1.0.9
+
+# HTTP
+requests==2.32.3
