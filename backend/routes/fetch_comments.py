@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 
+import requests as http_requests
 from flask import Blueprint, request, jsonify, current_app, g
 
 from meta_comments import (
@@ -49,6 +50,127 @@ def fetch_status():
         "has_token": bool(creds and creds.page_access_token),
         "has_ig_account": bool(creds and creds.instagram_account_id),
     }), 200
+
+
+@fetch_bp.route("/test-meta", methods=["GET"])
+@require_auth
+@require_admin
+def test_meta_api():
+    """Full Meta API diagnostic — tests token, pages, webhook, and permissions."""
+    creds = _get_creds()
+    token = creds.page_access_token if creds else ""
+    page_id = creds.page_id if creds else ""
+
+    results = {
+        "config": {
+            "app_id_set": bool(creds and creds.app_id),
+            "app_secret_set": bool(creds and creds.app_secret),
+            "page_id": page_id or "NOT SET",
+            "token_set": bool(token),
+            "verify_token_set": bool(creds and creds.webhook_verify_token),
+            "source": "tenant_credentials",
+        },
+        "tests": {},
+    }
+
+    # Test 1: Token validity — /me
+    try:
+        resp = http_requests.get(
+            "https://graph.facebook.com/v25.0/me",
+            params={"access_token": token, "fields": "id,name"},
+            timeout=10
+        )
+        data = resp.json()
+        if "error" in data:
+            results["tests"]["token_valid"] = {"status": "FAIL", "error": data["error"].get("message")}
+        else:
+            results["tests"]["token_valid"] = {
+                "status": "PASS", "user": data.get("name"), "id": data.get("id"),
+            }
+    except Exception as e:
+        results["tests"]["token_valid"] = {"status": "ERROR", "error": str(e)}
+
+    # Test 2: Permissions
+    try:
+        resp = http_requests.get(
+            "https://graph.facebook.com/v25.0/me/permissions",
+            params={"access_token": token},
+            timeout=10
+        )
+        data = resp.json()
+        perms = data.get("data", [])
+        granted = [p["permission"] for p in perms if p.get("status") == "granted"]
+        results["tests"]["permissions"] = {
+            "status": "PASS" if granted else "INFO",
+            "granted": granted,
+            "note": "Page Access Token — permissions managed at page level" if not granted else None,
+        }
+    except Exception as e:
+        results["tests"]["permissions"] = {"status": "ERROR", "error": str(e)}
+
+    # Test 3: Page access
+    try:
+        resp = http_requests.get(
+            "https://graph.facebook.com/v25.0/me/accounts",
+            params={"access_token": token},
+            timeout=10
+        )
+        data = resp.json()
+        pages = data.get("data", [])
+        results["tests"]["page_access"] = {
+            "status": "PASS" if pages else "INFO",
+            "pages": [{"name": p.get("name"), "id": p.get("id")} for p in pages],
+            "count": len(pages),
+            "note": "Page Access Token — direct access" if not pages else None,
+        }
+    except Exception as e:
+        results["tests"]["page_access"] = {"status": "ERROR", "error": str(e)}
+
+    # Test 4: Direct page access
+    if page_id:
+        try:
+            resp = http_requests.get(
+                f"https://graph.facebook.com/v25.0/{page_id}",
+                params={"access_token": token, "fields": "name,id,fan_count"},
+                timeout=10
+            )
+            data = resp.json()
+            if "error" in data:
+                results["tests"]["direct_page"] = {"status": "FAIL", "error": data["error"].get("message")}
+            else:
+                results["tests"]["direct_page"] = {"status": "PASS", "name": data.get("name"), "id": data.get("id")}
+        except Exception as e:
+            results["tests"]["direct_page"] = {"status": "ERROR", "error": str(e)}
+    else:
+        results["tests"]["direct_page"] = {"status": "SKIP", "note": "No Page ID configured"}
+
+    # Test 5: Page feed
+    if page_id:
+        try:
+            resp = http_requests.get(
+                f"https://graph.facebook.com/v25.0/{page_id}/feed",
+                params={"access_token": token, "fields": "message,created_time", "limit": "3"},
+                timeout=10
+            )
+            data = resp.json()
+            if "error" in data:
+                results["tests"]["page_feed"] = {"status": "FAIL", "error": data["error"].get("message")}
+            else:
+                results["tests"]["page_feed"] = {"status": "PASS", "posts_found": len(data.get("data", []))}
+        except Exception as e:
+            results["tests"]["page_feed"] = {"status": "ERROR", "error": str(e)}
+    else:
+        results["tests"]["page_feed"] = {"status": "SKIP", "note": "No Page ID configured"}
+
+    # Test 6: Webhook
+    results["tests"]["webhook_config"] = {
+        "status": "INFO",
+        "verify_token": creds.webhook_verify_token if creds else "NOT SET",
+        "app_secret_set": bool(creds and creds.app_secret),
+        "note": "Configure in Meta Developer Portal → Webhooks → callback URL",
+    }
+
+    return jsonify(results), 200
 
 
 @fetch_bp.route("/facebook", methods=["GET"])
