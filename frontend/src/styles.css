@@ -1398,20 +1398,7 @@ body {
   font-weight: 500;
 }
 
-.config-input {
-  background: var(--bg-hover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 0.9rem;
-  padding: 8px 12px;
-  width: 120px;
-  outline: none;
-  transition: border-color 0.2s;
-}
 
-.config-input:focus { border-color: var(--accent-blue); }
 
 .fetch-actions {
   display: flex;
@@ -1953,3 +1940,71 @@ body {
 .test-skip { color: var(--yellow); }
 .webhook-url { display: block; background: var(--bg-hover); padding: 8px 12px; border-radius: var(--radius); font-size: 0.85rem; word-break: break-all; }
 .user-tenant { font-size: 0.65rem; color: var(--text-dim); background: var(--bg-hover); padding: 1px 6px; border-radius: 4px; }
+
+/* ── Global form input styling ─────────────────────────────── */
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.field label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+
+.field input,
+.field select,
+.field textarea,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="url"],
+input[type="number"],
+select,
+textarea {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  padding: 10px 13px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.08);
+}
+
+.field input::placeholder,
+input::placeholder, select::placeholder, textarea::placeholder {
+  color: var(--text-dim);
+}
+
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+textarea { min-height: 80px; resize: vertical; }
+
+/* Daisy-chain existing custom-input to inherit globals */
+.custom-input,
+.config-input {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  padding: 10px 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+
+.custom-input:focus,
+.config-input:focus { border-color: var(--accent-blue); }
