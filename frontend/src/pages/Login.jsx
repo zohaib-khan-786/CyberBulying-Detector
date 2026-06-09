@@ -3,12 +3,13 @@ import { Shield } from "lucide-react";
 import { API_BASE } from "../config";
 
 export default function Login({ onLogin }) {
-  const [mode, setMode]       = useState("login"); // login | register
-  const [username, setUsername] = useState("");
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
+  const [mode, setMode]         = useState("login"); // login | register
+  const [username, setUsername]   = useState("");
+  const [email, setEmail]         = useState("");
+  const [password, setPassword]   = useState("");
+  const [tenantName, setTenantName] = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState("");
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -18,7 +19,7 @@ export default function Login({ onLogin }) {
     try {
       const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
       const body = { username, password };
-      if (mode === "register") body.email = email;
+      if (mode === "register") { body.email = email; body.tenant_name = tenantName || username; }
 
       const res = await fetch(`${API_BASE}${endpoint}`, {
         method:  "POST",
@@ -97,16 +98,16 @@ export default function Login({ onLogin }) {
           </div>
 
           {mode === "register" && (
-            <div className="field">
-              <label>Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="Enter email"
-                required
-              />
-            </div>
+            <>
+              <div className="field">
+                <label>Email</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Enter email" required />
+              </div>
+              <div className="field">
+                <label>Workspace Name</label>
+                <input type="text" value={tenantName} onChange={e => setTenantName(e.target.value)} placeholder="Your company / brand name" />
+              </div>
+            </>
           )}
 
           <div className="field">

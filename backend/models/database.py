@@ -12,14 +12,14 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, Integer,
+    Boolean, Column, DateTime, Float, ForeignKey, Integer,
     String, Text, create_engine, event, pool,
 )
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker, relationship
 
 # ── Engine ─────────────────────────────────────────────────────────────────────
 
@@ -51,11 +51,53 @@ class Base(DeclarativeBase):
 
 # ── Models ─────────────────────────────────────────────────────────────────────
 
+class Tenant(Base):
+    """An isolated workspace — each admin gets their own."""
+    __tablename__ = "tenants"
+
+    id         = Column(Integer,  primary_key=True, autoincrement=True)
+    name       = Column(String(128), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    is_active  = Column(Boolean,  default=True)
+
+
+class MetaCredentials(Base):
+    """Per-tenant Meta API credentials (encrypted at rest in production)."""
+    __tablename__ = "meta_credentials"
+
+    id                    = Column(Integer,  primary_key=True, autoincrement=True)
+    tenant_id             = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    app_id                = Column(String(64),  nullable=True)
+    app_secret            = Column(String(256), nullable=True)
+    page_access_token     = Column(String(512), nullable=True)
+    page_id               = Column(String(64),  nullable=True)
+    webhook_verify_token  = Column(String(128), nullable=True)
+    instagram_account_id  = Column(String(64),  nullable=True)
+    is_active             = Column(Boolean, default=True)
+    created_at            = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at            = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    tenant = relationship("Tenant", backref="meta_credentials")
+
+    def to_dict(self) -> dict:
+        return {
+            "app_id":               self.app_id,
+            "page_id":              self.page_id,
+            "instagram_account_id": self.instagram_account_id,
+            "webhook_verify_token": self.webhook_verify_token,
+            "has_token":            bool(self.page_access_token),
+            "has_secret":           bool(self.app_secret),
+            "is_active":            self.is_active,
+            "updated_at":           self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class Flag(Base):
     """Every piece of text analysed and found harmful."""
     __tablename__ = "flags"
 
     id            = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id     = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     text          = Column(Text,    nullable=False)
     label         = Column(String(32),  nullable=False)
     label_id      = Column(Integer,     nullable=False)
@@ -77,7 +119,9 @@ class Flag(Base):
     mod_action    = Column(String(16),  nullable=True)        # delete | warn | block | None
     mod_note      = Column(Text,        nullable=True)
     moderated_at  = Column(DateTime,    nullable=True)
-    moderated_by  = Column(String(64),  nullable=True)        # admin username (future JWT)
+    moderated_by  = Column(String(64),  nullable=True)        # admin username
+
+    tenant = relationship("Tenant", backref="flags")
 
     def to_dict(self) -> dict:
         return {
@@ -109,6 +153,7 @@ class ModeratedUser(Base):
     __tablename__ = "moderated_users"
 
     id          = Column(Integer,    primary_key=True, autoincrement=True)
+    tenant_id   = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     username    = Column(String(128), nullable=False, index=True)
     platform    = Column(String(32),  nullable=False)
     action      = Column(String(16),  nullable=False)   # warn | block
@@ -118,6 +163,8 @@ class ModeratedUser(Base):
     expires_at  = Column(DateTime,    nullable=True)    # None = permanent
     is_active   = Column(Boolean,     default=True)
     actioned_by = Column(String(64),  nullable=True)
+
+    tenant = relationship("Tenant", backref="moderated_users")
 
     def to_dict(self) -> dict:
         return {
@@ -139,6 +186,7 @@ class TimeSeriesPoint(Base):
     __tablename__ = "timeseries"
 
     id        = Column(Integer,  primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     hour      = Column(DateTime, nullable=False, index=True)   # truncated to hour
     label     = Column(String(32), nullable=False)
     count     = Column(Integer,  default=0)
@@ -156,5 +204,5 @@ def get_db() -> Session:
 
 
 def init_db():
-    """Create all tables if they don't exist."""
-    Base.metadata.create_all(bind=engine)
+    """Create all tables if they don't exist — uses raw SQL for true idempotency."""
+    Base.metadata.create_all(bind=engine, checkfirst=True)

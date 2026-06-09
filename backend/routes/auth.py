@@ -1,10 +1,14 @@
 """
 Auth endpoints
-POST /api/auth/register  — create a new user account
-POST /api/auth/login     — obtain JWT access + refresh tokens
-GET  /api/auth/me        — current user profile (protected)
-POST /api/auth/refresh   — refresh an access token
-GET  /api/auth/users     — list all users (admin only)
+POST /api/auth/register          — create a new tenant + admin account
+POST /api/auth/login             — obtain JWT access + refresh tokens
+GET  /api/auth/me                — current user profile (protected)
+POST /api/auth/refresh           — refresh an access token
+GET  /api/auth/users             — list users in tenant (admin only)
+POST /api/auth/users             — create a manager user (admin only)
+PATCH /api/auth/users/<id>/role  — change user role (admin only)
+POST /api/auth/users/<id>/deactivate — deactivate user (admin only)
+POST /api/auth/users/<id>/activate   — activate user (admin only)
 """
 
 from __future__ import annotations
@@ -14,8 +18,8 @@ import logging
 from flask import Blueprint, request, jsonify, g
 from sqlalchemy.exc import IntegrityError
 
-from models.database import SessionLocal
-from models.user import User
+from models.database import SessionLocal, Tenant
+from models.user import User, VALID_ROLES
 from middleware.auth import (
     require_auth,
     require_admin,
@@ -28,7 +32,7 @@ auth_bp = Blueprint("auth", __name__)
 logger = logging.getLogger(__name__)
 
 
-# ── Register ──────────────────────────────────────────────────────────────────
+# ── Register (creates a new tenant) ───────────────────────────────────────────
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
@@ -36,8 +40,8 @@ def register():
     username = (data.get("username") or "").strip()
     email    = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
+    tenant_name = (data.get("tenant_name") or username).strip()
 
-    # Validate
     for validator, value in [
         (User.validate_username, username),
         (User.validate_email,    email),
@@ -49,13 +53,17 @@ def register():
 
     db = SessionLocal()
     try:
-        user = User(username=username, email=email)
+        tenant = Tenant(name=tenant_name)
+        db.add(tenant)
+        db.flush()
+
+        user = User(username=username, email=email, role="admin", tenant_id=tenant.id)
         user.set_password(password)
         db.add(user)
         db.commit()
         db.refresh(user)
-        logger.info("New user registered: @%s", username)
-        return jsonify({"user": user.to_dict()}), 201
+        logger.info("New tenant '%s' + admin '@%s' registered.", tenant_name, username)
+        return jsonify({"user": user.to_dict(), "tenant_name": tenant.name}), 201
     except IntegrityError:
         db.rollback()
         return jsonify({"error": "Username or email already exists"}), 409
@@ -89,7 +97,7 @@ def login():
         access_token  = generate_access_token(user)
         refresh_token = generate_refresh_token(user)
 
-        logger.info("User @%s logged in.", username)
+        logger.info("User @%s logged in (role=%s, tenant=%s).", username, user.role, user.tenant_id)
         return jsonify({
             "user":          user.to_dict(),
             "access_token":  access_token,
@@ -134,21 +142,25 @@ def refresh():
         db.close()
 
 
-# ── List users (admin only) ──────────────────────────────────────────────────
+# ── List users (tenant-scoped) ────────────────────────────────────────────────
 
 @auth_bp.route("/users", methods=["GET"])
 @require_auth
 @require_admin
 def list_users():
-    db = SessionLocal()
+    db = g.get("db") or SessionLocal()
+    close = "db" not in g
     try:
         page     = int(request.args.get("page", 1))
         per_page = min(int(request.args.get("per_page", 20)), 100)
 
-        total = db.query(User).count()
+        q = db.query(User)
+        if g.current_user.role != "super_admin":
+            q = q.filter(User.tenant_id == g.current_user.tenant_id)
+
+        total = q.count()
         users = (
-            db.query(User)
-            .order_by(User.created_at.desc())
+            q.order_by(User.created_at.desc())
             .offset((page - 1) * per_page)
             .limit(per_page)
             .all()
@@ -160,10 +172,66 @@ def list_users():
             "users":    [u.to_dict() for u in users],
         }), 200
     finally:
-        db.close()
+        if close:
+            db.close()
 
 
-# ── Update user role (admin only) ────────────────────────────────────────────
+# ── Create manager user (admin only) ──────────────────────────────────────────
+
+@auth_bp.route("/users", methods=["POST"])
+@require_auth
+@require_admin
+def create_user():
+    data     = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    email    = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    role     = (data.get("role") or "manager").strip()
+
+    if role not in ("manager", "admin"):
+        return jsonify({"error": "Role must be 'manager' or 'admin'"}), 400
+
+    # Only super_admin can create other admins
+    if role == "admin" and g.current_user.role != "super_admin":
+        return jsonify({"error": "Only super_admin can create admin users"}), 403
+
+    for validator, value in [
+        (User.validate_username, username),
+        (User.validate_email,    email),
+        (User.validate_password, password),
+    ]:
+        err = validator(value)
+        if err:
+            return jsonify({"error": err}), 400
+
+    db = g.get("db") or SessionLocal()
+    close = "db" not in g
+    try:
+        user = User(
+            username=username,
+            email=email,
+            role=role,
+            tenant_id=g.current_user.tenant_id,
+        )
+        user.set_password(password)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        logger.info("User @%s (role=%s) created by @%s.", username, role, g.current_user.username)
+        return jsonify({"user": user.to_dict()}), 201
+    except IntegrityError:
+        db.rollback()
+        return jsonify({"error": "Username or email already exists"}), 409
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Failed to create user: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+    finally:
+        if close:
+            db.close()
+
+
+# ── Update user role ──────────────────────────────────────────────────────────
 
 @auth_bp.route("/users/<int:user_id>/role", methods=["PATCH"])
 @require_auth
@@ -172,58 +240,76 @@ def update_role(user_id: int):
     data = request.get_json(silent=True) or {}
     new_role = (data.get("role") or "").strip()
 
-    if new_role not in ("admin", "user"):
-        return jsonify({"error": "Role must be 'admin' or 'user'"}), 400
+    if new_role not in VALID_ROLES:
+        return jsonify({"error": f"Role must be one of {sorted(VALID_ROLES)}"}), 400
 
-    db = SessionLocal()
+    db = g.get("db") or SessionLocal()
+    close = "db" not in g
     try:
-        user = db.query(User).filter(User.id == user_id).first()
+        q = db.query(User).filter(User.id == user_id)
+        if g.current_user.role != "super_admin":
+            q = q.filter(User.tenant_id == g.current_user.tenant_id)
+
+        user = q.first()
         if not user:
             return jsonify({"error": "User not found"}), 404
 
         user.role = new_role
         db.commit()
-        logger.info("User @%s role changed to '%s' by admin", user.username, new_role)
+        logger.info("User @%s role changed to '%s' by @%s", user.username, new_role, g.current_user.username)
         return jsonify({"user": user.to_dict()}), 200
     finally:
-        db.close()
+        if close:
+            db.close()
 
 
-# ── Deactivate user (admin only) ─────────────────────────────────────────────
+# ── Deactivate user ───────────────────────────────────────────────────────────
 
 @auth_bp.route("/users/<int:user_id>/deactivate", methods=["POST"])
 @require_auth
 @require_admin
 def deactivate_user(user_id: int):
-    db = SessionLocal()
+    db = g.get("db") or SessionLocal()
+    close = "db" not in g
     try:
-        user = db.query(User).filter(User.id == user_id).first()
+        q = db.query(User).filter(User.id == user_id)
+        if g.current_user.role != "super_admin":
+            q = q.filter(User.tenant_id == g.current_user.tenant_id)
+
+        user = q.first()
         if not user:
             return jsonify({"error": "User not found"}), 404
 
         user.is_active = False
         db.commit()
-        logger.info("User @%s deactivated by admin", user.username)
+        logger.info("User @%s deactivated by @%s", user.username, g.current_user.username)
         return jsonify({"user": user.to_dict()}), 200
     finally:
-        db.close()
+        if close:
+            db.close()
 
 
-# ── Activate user (admin only) ───────────────────────────────────────────────
+# ── Activate user ─────────────────────────────────────────────────────────────
 
 @auth_bp.route("/users/<int:user_id>/activate", methods=["POST"])
 @require_auth
 @require_admin
 def activate_user(user_id: int):
-    db = SessionLocal()
+    db = g.get("db") or SessionLocal()
+    close = "db" not in g
     try:
-        user = db.query(User).filter(User.id == user_id).first()
+        q = db.query(User).filter(User.id == user_id)
+        if g.current_user.role != "super_admin":
+            q = q.filter(User.tenant_id == g.current_user.tenant_id)
+
+        user = q.first()
         if not user:
             return jsonify({"error": "User not found"}), 404
 
         user.is_active = True
         db.commit()
-        logger.info("User @%s activated by admin", user.username)
+        logger.info("User @%s activated by @%s", user.username, g.current_user.username)
         return jsonify({"user": user.to_dict()}), 200
     finally:
-        db.close()
+        if close:
+            db.close()

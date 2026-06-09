@@ -13,8 +13,11 @@ build/
 *.key
 *.pem
 
+# Database
+*.db
+*.sqlite
+
 # Trained models (large binaries)
-backend/models/saved_models/*.pkl
 backend/models/saved_models/*.pt
 backend/models/saved_models/*.bin
 

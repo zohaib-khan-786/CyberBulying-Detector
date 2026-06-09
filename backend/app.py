@@ -16,14 +16,15 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 from models.classifier  import CyberbullyingClassifier
-from models.database    import init_db, SessionLocal
-from models.user        import User  # must be imported before init_db()
+from models.database    import init_db, SessionLocal, Tenant
+from models.user        import User
 from routes.detect      import detect_bp
 from routes.webhook     import webhook_bp
 from routes.dashboard   import dashboard_bp
 from routes.moderation  import moderation_bp
 from routes.auth        import auth_bp
 from routes.fetch_comments import fetch_bp
+from routes.settings    import settings_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,64 +32,90 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": os.getenv("ALLOWED_ORIGINS", "*")}})
 
-# ── Database ──────────────────────────────────────────────────────────────────
-init_db()
-logger.info("Database initialised.")
+def create_app() -> Flask:
+    app = Flask(__name__)
+    CORS(app, resources={r"/api/*": {"origins": os.getenv("ALLOWED_ORIGINS", "*")}})
 
-# ── Classifier ────────────────────────────────────────────────────────────────
-use_transformer = os.getenv("USE_TRANSFORMER", "false").lower() == "true"
-classifier = CyberbullyingClassifier(use_transformer=use_transformer)
-classifier.load()
-app.config["CLASSIFIER"] = classifier
+    # ── Database ──────────────────────────────────────────────────────────────
+    init_db()
+    logger.info("Database initialised.")
 
-# ── Default admin user ─────────────────────────────────────────────────────────
-def _ensure_admin_user():
-    """Create a default admin user from env vars if no admin exists."""
-    admin_username = os.getenv("ADMIN_USERNAME", "admin")
-    admin_password = os.getenv("ADMIN_PASSWORD", "admin123456")
+    # ── Classifier ────────────────────────────────────────────────────────────
+    use_transformer = os.getenv("USE_TRANSFORMER", "false").lower() == "true"
+    classifier = CyberbullyingClassifier(use_transformer=use_transformer)
+    classifier.load()
+    app.config["CLASSIFIER"] = classifier
+
+    # ── Default super_admin user + tenant ──────────────────────────────────────
+    _ensure_default_tenant()
+
+    # ── Blueprints ────────────────────────────────────────────────────────────
+    app.register_blueprint(auth_bp,       url_prefix="/api/auth")
+    app.register_blueprint(fetch_bp,      url_prefix="/api/fetch")
+    app.register_blueprint(detect_bp,     url_prefix="/api/detect")
+    app.register_blueprint(webhook_bp,    url_prefix="/api/webhook")
+    app.register_blueprint(dashboard_bp,  url_prefix="/api/dashboard")
+    app.register_blueprint(moderation_bp, url_prefix="/api/moderation")
+    app.register_blueprint(settings_bp,   url_prefix="/api/settings")
+
+    # ── Routes ────────────────────────────────────────────────────────────────
+    @app.route("/api/health", methods=["GET"])
+    def health():
+        return jsonify({
+            "status":       "ok",
+            "model_loaded": classifier.is_loaded,
+            "model_type":   "transformer" if use_transformer else "sklearn",
+            "version":      "2.0.0",
+        })
+
+    @app.route("/privacy-policy")
+    def privacy_policy():
+        return _PRIVACY_POLICY_HTML, 200, {"Content-Type": "text/html"}
+
+    @app.errorhandler(404)
+    def not_found(e):
+        return jsonify({"error": "Endpoint not found"}), 404
+
+    @app.errorhandler(500)
+    def server_error(e):
+        return jsonify({"error": "Internal server error"}), 500
+
+    return app
+
+
+def _ensure_default_tenant():
+    """Create the default tenant and super_admin if none exist."""
     db = SessionLocal()
     try:
-        existing = db.query(User).filter(User.role == "admin").first()
-        if not existing:
-            admin = User(username=admin_username, email=f"{admin_username}@cyberguard.local", role="admin")
-            admin.set_password(admin_password)
-            db.add(admin)
-            db.commit()
-            logger.info("Default admin user '@%s' created.", admin_username)
+        existing = db.query(Tenant).first()
+        if existing:
+            return
+
+        tenant = Tenant(name="Default")
+        db.add(tenant)
+        db.flush()
+
+        admin_username = os.getenv("ADMIN_USERNAME", "admin")
+        admin_password = os.getenv("ADMIN_PASSWORD", "admin123456")
+        super_admin = User(
+            username=admin_username,
+            email=f"{admin_username}@cyberguard.local",
+            role="super_admin",
+            tenant_id=tenant.id,
+        )
+        super_admin.set_password(admin_password)
+        db.add(super_admin)
+        db.commit()
+        logger.info("Default tenant + super_admin '@%s' created.", admin_username)
     except Exception as exc:
         db.rollback()
-        logger.error("Failed to create default admin: %s", exc)
+        logger.error("Failed to create default tenant: %s", exc)
     finally:
         db.close()
 
-_ensure_admin_user()
 
-# ── Blueprints ────────────────────────────────────────────────────────────────
-app.register_blueprint(auth_bp,       url_prefix="/api/auth")
-app.register_blueprint(fetch_bp,      url_prefix="/api/fetch")
-app.register_blueprint(detect_bp,     url_prefix="/api/detect")
-app.register_blueprint(webhook_bp,    url_prefix="/api/webhook")
-app.register_blueprint(dashboard_bp,  url_prefix="/api/dashboard")
-app.register_blueprint(moderation_bp, url_prefix="/api/moderation")
-
-
-@app.route("/api/health", methods=["GET"])
-def health():
-    return jsonify({
-        "status":       "ok",
-        "model_loaded": classifier.is_loaded,
-        "model_type":   "transformer" if use_transformer else "sklearn",
-        "version":      "1.1.0",
-    })
-
-
-@app.route("/privacy-policy")
-def privacy_policy():
-    """Serve privacy policy page required by Meta for app review."""
-    return """<!DOCTYPE html>
+_PRIVACY_POLICY_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -145,18 +172,10 @@ def privacy_policy():
     <p>Contact: <a href="mailto:privacy@cyberguard.app">privacy@cyberguard.app</a></p>
   </div>
 </body>
-</html>""", 200, {"Content-Type": "text/html"}
+</html>"""
 
 
-@app.errorhandler(404)
-def not_found(e):
-    return jsonify({"error": "Endpoint not found"}), 404
-
-
-@app.errorhandler(500)
-def server_error(e):
-    return jsonify({"error": "Internal server error"}), 500
-
+app = create_app()
 
 if __name__ == "__main__":
     port  = int(os.getenv("PORT", 5000))

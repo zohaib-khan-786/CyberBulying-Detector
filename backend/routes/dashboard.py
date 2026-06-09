@@ -1,40 +1,56 @@
 """
-Dashboard API
-GET /api/dashboard/stats     — aggregate statistics + hourly timeseries
-GET /api/dashboard/recent    — recent flagged activity feed
-GET /api/dashboard/timeseries — flags-over-time for the chart
+Dashboard API — tenant-scoped.
+GET /api/dashboard/stats       — aggregate statistics
+GET /api/dashboard/recent      — recent flagged activity feed
+GET /api/dashboard/timeseries  — flags-over-time for the chart
 """
 
 from __future__ import annotations
 
 import time
 import logging
-from collections import Counter
 from datetime import datetime, timedelta
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from sqlalchemy import func
 
 from models.database import Flag, SessionLocal
-from middleware.auth import require_auth
+from middleware.auth import require_auth, require_role
 
 dashboard_bp = Blueprint("dashboard", __name__)
-logger       = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
+
+
+def _tenant_filter(q):
+    """Scope query to current user's tenant."""
+    if g.current_user.tenant_id:
+        return q.filter(Flag.tenant_id == g.current_user.tenant_id)
+    return q
 
 
 @dashboard_bp.route("/stats", methods=["GET"])
 @require_auth
+@require_role("super_admin", "admin", "manager")
 def stats():
     db = SessionLocal()
     try:
-        total = db.query(Flag).filter(Flag.is_harmful == True).count()
-        pending = db.query(Flag).filter(
-            Flag.is_harmful == True, Flag.mod_status == "pending"
-        ).count()
+        base = db.query(Flag).filter(Flag.is_harmful == True)
+        base = _tenant_filter(base)
 
-        label_rows    = db.query(Flag.label,    func.count()).filter(Flag.is_harmful == True).group_by(Flag.label).all()
-        severity_rows = db.query(Flag.severity, func.count()).filter(Flag.is_harmful == True).group_by(Flag.severity).all()
-        source_rows   = db.query(Flag.source,   func.count()).filter(Flag.is_harmful == True).group_by(Flag.source).all()
+        total = base.count()
+        pending = base.filter(Flag.mod_status == "pending").count()
+
+        label_q = db.query(Flag.label, func.count()).filter(Flag.is_harmful == True)
+        label_q = _tenant_filter(label_q)
+        label_rows = label_q.group_by(Flag.label).all()
+
+        severity_q = db.query(Flag.severity, func.count()).filter(Flag.is_harmful == True)
+        severity_q = _tenant_filter(severity_q)
+        severity_rows = severity_q.group_by(Flag.severity).all()
+
+        source_q = db.query(Flag.source, func.count()).filter(Flag.is_harmful == True)
+        source_q = _tenant_filter(source_q)
+        source_rows = source_q.group_by(Flag.source).all()
 
         return jsonify({
             "total_flagged":         total,
@@ -50,17 +66,14 @@ def stats():
 
 @dashboard_bp.route("/recent", methods=["GET"])
 @require_auth
+@require_role("super_admin", "admin", "manager")
 def recent():
     limit = min(int(request.args.get("limit", 10)), 50)
     db = SessionLocal()
     try:
-        flags = (
-            db.query(Flag)
-            .filter(Flag.is_harmful == True)
-            .order_by(Flag.created_at.desc())
-            .limit(limit)
-            .all()
-        )
+        q = db.query(Flag).filter(Flag.is_harmful == True)
+        q = _tenant_filter(q)
+        flags = q.order_by(Flag.created_at.desc()).limit(limit).all()
         return jsonify({"items": [f.to_dict() for f in flags]}), 200
     finally:
         db.close()
@@ -68,25 +81,17 @@ def recent():
 
 @dashboard_bp.route("/timeseries", methods=["GET"])
 @require_auth
+@require_role("super_admin", "admin", "manager")
 def timeseries():
-    """
-    Returns hourly flag counts for the last N hours (default 24).
-    Powers the time-series chart on the dashboard.
-    Response shape: [ { "hour": "2024-05-14T10:00", "total": 5, "by_label": {...} }, ... ]
-    """
-    hours = min(int(request.args.get("hours", 24)), 168)  # cap at 1 week
+    hours = min(int(request.args.get("hours", 24)), 168)
     since = datetime.utcnow() - timedelta(hours=hours)
 
     db = SessionLocal()
     try:
-        rows = (
-            db.query(Flag)
-            .filter(Flag.is_harmful == True, Flag.created_at >= since)
-            .order_by(Flag.created_at.asc())
-            .all()
-        )
+        q = db.query(Flag).filter(Flag.is_harmful == True, Flag.created_at >= since)
+        q = _tenant_filter(q)
+        rows = q.order_by(Flag.created_at.asc()).all()
 
-        # Bucket into hours
         buckets: dict[str, dict] = {}
         for flag in rows:
             hour_key = flag.created_at.strftime("%Y-%m-%dT%H:00")

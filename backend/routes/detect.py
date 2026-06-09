@@ -1,8 +1,9 @@
 """
 Detection endpoints
-POST /api/detect/text     — single text analysis
-POST /api/detect/batch    — analyse up to 50 texts at once
-GET  /api/detect/history  — paginated flagged texts from DB
+POST /api/detect/text       — single text analysis
+POST /api/detect/batch      — analyse up to 50 texts at once
+GET  /api/detect/all-flags  — all flags for Live Feed (tenant-scoped)
+GET  /api/detect/history    — paginated flagged texts from DB (tenant-scoped)
 """
 
 from __future__ import annotations
@@ -10,9 +11,7 @@ from __future__ import annotations
 import json
 import time
 import logging
-from datetime import datetime
-
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, g
 
 from models.database import Flag, SessionLocal
 from middleware.auth import require_auth
@@ -25,11 +24,17 @@ def _get_clf():
     return current_app.config["CLASSIFIER"]
 
 
+def _get_tenant_id() -> int | None:
+    """Get tenant_id from current user if authenticated."""
+    user = getattr(g, "current_user", None)
+    return user.tenant_id if user else None
+
+
 def _save_flag(result, source: str, author: str, platform: str | None = None) -> Flag | None:
-    """Persist a harmful prediction to the database. Returns the saved Flag or None on error."""
     db = SessionLocal()
     try:
         flag = Flag(
+            tenant_id     = _get_tenant_id(),
             text          = result.text,
             label         = result.label,
             label_id      = result.label_id,
@@ -53,8 +58,6 @@ def _save_flag(result, source: str, author: str, platform: str | None = None) ->
     finally:
         db.close()
 
-
-# ── Single prediction ─────────────────────────────────────────────────────────
 
 @detect_bp.route("/text", methods=["POST"])
 def detect_text():
@@ -82,8 +85,6 @@ def detect_text():
 
     return jsonify(payload), 200
 
-
-# ── Batch prediction ──────────────────────────────────────────────────────────
 
 @detect_bp.route("/batch", methods=["POST"])
 def detect_batch():
@@ -118,38 +119,32 @@ def detect_batch():
     return jsonify({"total": len(output), "harmful_count": harmful_count, "results": output}), 200
 
 
-# ── History (from DB) ─────────────────────────────────────────────────────────
-
 @detect_bp.route("/all-flags", methods=["GET"])
 @require_auth
 def get_all_flags():
-    """Get ALL flags (harmful + clean) for Live Feed. Excludes deleted items."""
+    """Get ALL flags (harmful + clean) for Live Feed — tenant-scoped."""
     page            = int(request.args.get("page", 1))
     per_page        = min(int(request.args.get("per_page", 20)), 100)
     label_filter    = request.args.get("label")
     platform_filter = request.args.get("platform")
+    tenant_id       = _get_tenant_id()
 
     db = SessionLocal()
     try:
         q = db.query(Flag).filter(
             (Flag.mod_action != "delete") | (Flag.mod_action.is_(None))
         )
+        if tenant_id:
+            q = q.filter(Flag.tenant_id == tenant_id)
         if label_filter and label_filter != "all":
             q = q.filter(Flag.label == label_filter)
         if platform_filter and platform_filter != "all":
             q = q.filter(Flag.platform == platform_filter)
 
         total = q.count()
-        flags = (
-            q.order_by(Flag.created_at.desc())
-            .offset((page - 1) * per_page)
-            .limit(per_page)
-            .all()
-        )
+        flags = q.order_by(Flag.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
         return jsonify({
-            "total": total,
-            "page": page,
-            "per_page": per_page,
+            "total": total, "page": page, "per_page": per_page,
             "items": [f.to_dict() for f in flags],
         }), 200
     finally:
@@ -163,28 +158,24 @@ def get_history():
     per_page        = min(int(request.args.get("per_page", 20)), 100)
     label_filter    = request.args.get("label")
     severity_filter = request.args.get("severity")
+    tenant_id       = _get_tenant_id()
 
     db = SessionLocal()
     try:
         q = db.query(Flag).filter(Flag.is_harmful == True)
+        if tenant_id:
+            q = q.filter(Flag.tenant_id == tenant_id)
         if label_filter:
             q = q.filter(Flag.label == label_filter)
         if severity_filter:
             q = q.filter(Flag.severity == severity_filter)
 
         total = q.count()
-        flags = (
-            q.order_by(Flag.created_at.desc())
-             .offset((page - 1) * per_page)
-             .limit(per_page)
-             .all()
-        )
+        flags = q.order_by(Flag.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
 
         return jsonify({
-            "page":     page,
-            "per_page": per_page,
-            "total":    total,
-            "items":    [f.to_dict() for f in flags],
+            "page": page, "per_page": per_page, "total": total,
+            "items": [f.to_dict() for f in flags],
         }), 200
     finally:
         db.close()

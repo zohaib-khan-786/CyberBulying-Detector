@@ -1,12 +1,6 @@
 """
-Moderation endpoints
-POST /api/moderation/action          — perform delete | warn | block on a flag
-POST /api/moderation/bulk            — perform action on multiple flags at once
-GET  /api/moderation/users           — list warned/blocked users
-POST /api/moderation/users/<id>/lift — lift a block/warn
-GET  /api/moderation/pending         — flags awaiting review
-GET  /api/moderation/export          — export flagged content as CSV
-GET  /api/moderation/user-activity   — per-user flag counts
+Moderation endpoints — tenant-scoped.
+Manager users can view (GET) but cannot perform actions (POST).
 """
 
 from __future__ import annotations
@@ -14,16 +8,15 @@ from __future__ import annotations
 import csv
 import io
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, request, jsonify, current_app, g, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from models.database import Flag, ModeratedUser, SessionLocal
-from middleware.auth import require_auth, require_admin
-from meta_api import delete_comment, block_user, unblock_user
+from models.database import Flag, ModeratedUser, MetaCredentials, SessionLocal
+from middleware.auth import require_auth, require_admin, require_role
+from meta_api import delete_comment
 
 moderation_bp = Blueprint("moderation", __name__)
 logger = logging.getLogger(__name__)
@@ -33,8 +26,22 @@ WARN_THRESHOLD = 2
 BLOCK_THRESHOLD = 4
 
 
-def _db() -> Session:
-    return SessionLocal()
+def _tenant_filter(q, model=None):
+    """Scope query to current user's tenant."""
+    m = model or Flag
+    if g.current_user.tenant_id:
+        return q.filter(m.tenant_id == g.current_user.tenant_id)
+    return q
+
+
+def _get_creds(db) -> MetaCredentials | None:
+    """Get tenant Meta credentials."""
+    if not g.current_user.tenant_id:
+        return None
+    return db.query(MetaCredentials).filter(
+        MetaCredentials.tenant_id == g.current_user.tenant_id,
+        MetaCredentials.is_active == True,
+    ).first()
 
 
 # ── Perform a moderation action ────────────────────────────────────────────────
@@ -54,9 +61,11 @@ def take_action():
     if action not in VALID_ACTIONS:
         return jsonify({"error": f"'action' must be one of {sorted(VALID_ACTIONS)}"}), 400
 
-    db = _db()
+    db = SessionLocal()
     try:
-        flag = db.query(Flag).filter(Flag.id == flag_id).first()
+        q = db.query(Flag).filter(Flag.id == flag_id)
+        q = _tenant_filter(q)
+        flag = q.first()
         if not flag:
             return jsonify({"error": f"Flag {flag_id} not found"}), 404
 
@@ -68,40 +77,28 @@ def take_action():
 
         result_msg = f"Flag {flag_id} marked as '{action}'."
 
-        if action == "warn":
-            _record_user_action(db, flag.author, flag.platform or flag.source, "warn",
-                note or f"Flagged for {flag.label}", flag.id, admin,
-                datetime.now(timezone.utc) + timedelta(days=30))
-            escalation = _check_auto_escalation(db, flag.author, flag.platform or flag.source, admin)
-            if escalation:
-                result_msg += f" {escalation}"
+        creds = _get_creds(db)
+        token = creds.page_access_token if creds else ""
+        page_id = creds.page_id if creds else ""
 
-        elif action == "block":
-            # Instagram has no Graph API block endpoint — skip entirely
-            if (flag.platform or "").lower() == "instagram":
-                result_msg = "Block is not available for Instagram comments. Use Delete to remove the comment."
-            else:
-                _record_user_action(db, flag.author, flag.platform or flag.source, "block",
-                    note or f"Blocked for {flag.label}", flag.id, admin, None)
-                if flag.author_id:
-                    api_result = block_user(os.getenv("META_PAGE_ID", ""), flag.author_id, flag.platform or "facebook")
-                    if api_result:
-                        result_msg += " User blocked on Facebook Page."
-                    else:
-                        result_msg += " Block recorded. Check that your app has pages_manage_engagement permission."
-                else:
-                    result_msg += " Block recorded (no user ID available — fetch comments first)."
+        if action in ("warn", "block"):
+            _record_user_action(db, flag.author, flag.platform or flag.source, action,
+                note or f"{action.capitalize()} for {flag.label}", flag.id, admin,
+                datetime.now(timezone.utc) + timedelta(days=30) if action == "warn" else None)
+            if action == "warn":
+                escalation = _check_auto_escalation(db, flag.author, flag.platform or flag.source, admin)
+                if escalation:
+                    result_msg += f" {escalation}"
 
-        elif action == "delete":
+        if action == "delete":
             _record_user_action(db, flag.author, flag.platform or flag.source, "delete",
                 note or f"Deleted comment for {flag.label}", flag.id, admin, None)
-            # Call Meta API to actually delete the comment
             if flag.comment_id:
-                api_result = delete_comment(flag.comment_id)
+                api_result = delete_comment(flag.comment_id, token)
                 if api_result:
                     result_msg += " Comment deleted from Meta platform."
                 else:
-                    result_msg += " Deletion recorded locally (Meta API unavailable)."
+                    result_msg += " Deletion recorded locally."
 
         db.commit()
         return jsonify({"success": True, "message": result_msg, "flag": flag.to_dict()}), 200
@@ -131,9 +128,11 @@ def bulk_action():
     if action not in VALID_ACTIONS:
         return jsonify({"error": f"'action' must be one of {sorted(VALID_ACTIONS)}"}), 400
 
-    db = _db()
+    db = SessionLocal()
     try:
-        flags = db.query(Flag).filter(Flag.id.in_(flag_ids)).all()
+        q = db.query(Flag).filter(Flag.id.in_(flag_ids))
+        q = _tenant_filter(q)
+        flags = q.all()
         processed = []
         for flag in flags:
             flag.mod_status   = "dismissed" if action == "dismiss" else "actioned"
@@ -145,9 +144,6 @@ def bulk_action():
                 _record_user_action(db, flag.author, flag.platform or flag.source, "warn",
                     note or f"Flagged for {flag.label}", flag.id, admin,
                     datetime.now(timezone.utc) + timedelta(days=30))
-            elif action == "block":
-                _record_user_action(db, flag.author, flag.platform or flag.source, "block",
-                    note or f"Blocked for {flag.label}", flag.id, admin, None)
             processed.append(flag.id)
 
         db.commit()
@@ -168,9 +164,9 @@ def export_csv():
     label_filter  = request.args.get("label")
     status_filter = request.args.get("status")
 
-    db = _db()
+    db = SessionLocal()
     try:
-        q = db.query(Flag)
+        q = _tenant_filter(db.query(Flag))
         if label_filter and label_filter != "all":
             q = q.filter(Flag.label == label_filter)
         if status_filter and status_filter != "all":
@@ -197,22 +193,28 @@ def export_csv():
 
 @moderation_bp.route("/user-activity", methods=["GET"])
 @require_auth
+@require_role("super_admin", "admin", "manager")
 def user_activity():
-    db = _db()
+    db = SessionLocal()
     try:
-        top_users = (
+        q = _tenant_filter(
             db.query(Flag.author, func.count(Flag.id).label("flag_count"))
             .filter(Flag.is_harmful == True, Flag.author != "anonymous")
-            .group_by(Flag.author).order_by(func.count(Flag.id).desc()).limit(10).all()
         )
-        by_platform = (
+        top_users = q.group_by(Flag.author).order_by(func.count(Flag.id).desc()).limit(10).all()
+
+        bp_q = _tenant_filter(
             db.query(Flag.platform, func.count(Flag.id).label("count"))
-            .filter(Flag.is_harmful == True).group_by(Flag.platform).all()
+            .filter(Flag.is_harmful == True)
         )
-        by_severity = (
+        by_platform = bp_q.group_by(Flag.platform).all()
+
+        sev_q = _tenant_filter(
             db.query(Flag.severity, func.count(Flag.id).label("count"))
-            .filter(Flag.is_harmful == True).group_by(Flag.severity).all()
+            .filter(Flag.is_harmful == True)
         )
+        by_severity = sev_q.group_by(Flag.severity).all()
+
         return jsonify({
             "top_users": [{"author": u, "count": c} for u, c in top_users],
             "by_platform": {p or "unknown": c for p, c in by_platform},
@@ -232,9 +234,9 @@ def list_moderated_users():
     page          = int(request.args.get("page", 1))
     per_page      = min(int(request.args.get("per_page", 20)), 100)
 
-    db = _db()
+    db = SessionLocal()
     try:
-        q = db.query(ModeratedUser)
+        q = _tenant_filter(db.query(ModeratedUser), ModeratedUser)
         if action_filter:
             q = q.filter(ModeratedUser.action == action_filter)
         if active_only:
@@ -252,17 +254,12 @@ def list_moderated_users():
 @require_auth
 @require_admin
 def lift_action(user_id: int):
-    db = _db()
+    db = SessionLocal()
     try:
-        user = db.query(ModeratedUser).filter(ModeratedUser.id == user_id).first()
+        q = _tenant_filter(db.query(ModeratedUser).filter(ModeratedUser.id == user_id), ModeratedUser)
+        user = q.first()
         if not user:
             return jsonify({"error": f"Record {user_id} not found"}), 404
-
-        # If lifting a block, also unblock on Meta (Facebook only, skip Instagram)
-        if user.action == "block" and (user.platform or "").lower() != "instagram":
-            flag = db.query(Flag).filter(Flag.id == user.flag_id).first() if user.flag_id else None
-            if flag and flag.author_id:
-                unblock_user(os.getenv("META_PAGE_ID", ""), flag.author_id)
 
         user.is_active = False
         db.commit()
@@ -274,17 +271,20 @@ def lift_action(user_id: int):
         db.close()
 
 
-# ── Pending queue ─────────────────────────────────────────────────────────────
+# ── Pending queue ──────────────────────────────────────────────────────────────
 
 @moderation_bp.route("/pending", methods=["GET"])
 @require_auth
+@require_role("super_admin", "admin", "manager")
 def pending_flags():
     page     = int(request.args.get("page", 1))
     per_page = min(int(request.args.get("per_page", 20)), 100)
 
-    db = _db()
+    db = SessionLocal()
     try:
-        q     = db.query(Flag).filter(Flag.mod_status == "pending", Flag.is_harmful == True)
+        q = _tenant_filter(
+            db.query(Flag).filter(Flag.mod_status == "pending", Flag.is_harmful == True)
+        )
         total = q.count()
         flags = q.order_by(Flag.created_at.desc()).offset((page - 1) * per_page).limit(per_page).all()
         return jsonify({"total": total, "page": page, "per_page": per_page, "flags": [f.to_dict() for f in flags]}), 200
@@ -300,7 +300,9 @@ def _record_user_action(db, username, platform, action, reason, flag_id, actione
         ModeratedUser.action == action, ModeratedUser.is_active == True).first()
     if existing:
         return
-    db.add(ModeratedUser(username=username, platform=platform or "unknown", action=action,
+    db.add(ModeratedUser(
+        tenant_id=g.current_user.tenant_id,
+        username=username, platform=platform or "unknown", action=action,
         reason=reason, flag_id=flag_id, actioned_by=actioned_by,
         expires_at=expires_at, is_active=True))
 

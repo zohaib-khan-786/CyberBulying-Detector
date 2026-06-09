@@ -1,5 +1,5 @@
 """
-Meta Webhook endpoints
+Meta Webhook endpoints — multi-tenant
 GET  /api/webhook/meta   — verification challenge (one-time setup)
 POST /api/webhook/meta   — incoming events from Facebook / Instagram
 """
@@ -15,54 +15,71 @@ import time
 from typing import List
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
-from models.database import Flag, SessionLocal
+from sqlalchemy.orm import Session
+
+from models.database import (
+    Flag, MetaCredentials, SessionLocal, Tenant, TimeSeriesPoint,
+)
+from models.classifier import CyberbullyingClassifier, PredictionResult
 
 webhook_bp = Blueprint("webhook", __name__)
 logger = logging.getLogger(__name__)
 
-VERIFY_TOKEN = os.getenv("META_WEBHOOK_VERIFY_TOKEN", "my_verify_token")
-APP_SECRET   = os.getenv("META_APP_SECRET", "")
 
-if not APP_SECRET:
-    logger.warning(
-        "META_APP_SECRET not set — webhook signature verification DISABLED. "
-        "Do not use in production."
-    )
+def _get_tenant_for_page(page_id: str) -> tuple[Tenant | None, MetaCredentials | None]:
+    """Find which tenant owns this page_id."""
+    db = SessionLocal()
+    try:
+        creds = db.query(MetaCredentials).filter(
+            MetaCredentials.page_id == page_id,
+            MetaCredentials.is_active == True,
+        ).first()
+        if creds:
+            tenant = db.query(Tenant).filter(Tenant.id == creds.tenant_id).first()
+            return tenant, creds
+        return None, None
+    finally:
+        db.close()
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+def _get_creds_for_verify_token(verify_token: str) -> MetaCredentials | None:
+    """Find credentials by webhook verify token (fallback)."""
+    db = SessionLocal()
+    try:
+        return db.query(MetaCredentials).filter(
+            MetaCredentials.webhook_verify_token == verify_token,
+            MetaCredentials.is_active == True,
+        ).first()
+    finally:
+        db.close()
 
-def _verify_signature(payload: bytes, sig_header: str) -> bool:
+
+def _verify_signature(payload: bytes, sig_header: str, app_secret: str) -> bool:
     """Validate X-Hub-Signature-256 header from Meta."""
-    if not APP_SECRET or not sig_header:
-        return True          # skip in dev if secret not configured
+    if not app_secret or not sig_header:
+        return True  # skip if no secret configured
     expected = "sha256=" + hmac.new(
-        APP_SECRET.encode(), payload, digestmod=hashlib.sha256
+        app_secret.encode(), payload, digestmod=hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(expected, sig_header)
 
 
 def _extract_comments(body: dict) -> list[dict]:
-    """
-    Parse Meta webhook payload and return list of
-    {platform, comment_id, text, from_name, timestamp}.
-
-    Handles three event types:
-    - Instagram comments:  entry.changes where field == "comments"
-    - Facebook page comments: entry.changes where field == "feed"
-    - Facebook messages:   entry.messaging where message exists
-    """
+    """Parse Meta webhook payload into comment dicts."""
     comments = []
 
     for entry in body.get("entry", []):
+        # Page ID from the entry — used for tenant routing
+        page_id = entry.get("id", "")
+
         for change in entry.get("changes", []):
             value = change.get("value", {})
             field = change.get("field", "")
 
-            # Instagram comments
             if field == "comments":
                 comments.append({
                     "platform":   "instagram",
+                    "page_id":    page_id,
                     "comment_id": value.get("id"),
                     "text":       value.get("text", ""),
                     "from_name":  value.get("from", {}).get("username", "unknown"),
@@ -70,14 +87,13 @@ def _extract_comments(body: dict) -> list[dict]:
                     "timestamp":  value.get("timestamp", int(time.time())),
                 })
 
-            # Facebook page comments (comes as "feed" field)
             if field == "feed":
                 item = value.get("item", "")
                 verb = value.get("verb", "")
-                # Only process new comments (not edits, deletes, etc.)
                 if item == "comment" and verb == "add":
                     comments.append({
                         "platform":   "facebook",
+                        "page_id":    page_id,
                         "comment_id": value.get("comment_id") or value.get("post_id"),
                         "text":       value.get("message", ""),
                         "from_name":  value.get("from", {}).get("name", "unknown"),
@@ -85,11 +101,11 @@ def _extract_comments(body: dict) -> list[dict]:
                         "timestamp":  value.get("created_time", int(time.time())),
                     })
 
-        # Facebook direct messages
         for msg in entry.get("messaging", []):
             if "message" in msg:
                 comments.append({
                     "platform":   "facebook",
+                    "page_id":    page_id,
                     "comment_id": msg.get("message", {}).get("mid"),
                     "text":       msg.get("message", {}).get("text", ""),
                     "from_name":  msg.get("sender", {}).get("id", "unknown"),
@@ -105,26 +121,21 @@ def _extract_comments(body: dict) -> list[dict]:
 @webhook_bp.route("/test", methods=["GET"])
 def test_webhook():
     """Test endpoint — confirms the webhook route is reachable."""
-    logger.info("Webhook test endpoint hit!")
+    token = os.getenv("META_WEBHOOK_VERIFY_TOKEN", "my_verify_token")
     return jsonify({
         "status": "ok",
         "message": "Webhook route is working",
-        "verify_token": VERIFY_TOKEN,
-        "app_secret_set": bool(APP_SECRET),
+        "verify_token": token,
     }), 200
 
 
 @webhook_bp.route("/debug", methods=["GET"])
 def debug_config():
     """Debug endpoint — shows current webhook configuration."""
-    logger.info("Debug endpoint hit!")
+    token = os.getenv("META_WEBHOOK_VERIFY_TOKEN", "")
     return jsonify({
-        "verify_token": VERIFY_TOKEN,
-        "app_secret_set": bool(APP_SECRET),
-        "app_secret_preview": APP_SECRET[:8] + "..." if APP_SECRET else "NOT SET",
-        "meta_page_token_set": bool(os.getenv("META_PAGE_ACCESS_TOKEN")),
-        "meta_page_id": os.getenv("META_PAGE_ID", "NOT SET"),
-        "meta_app_id": os.getenv("META_APP_ID", "NOT SET"),
+        "verify_token": token,
+        "note": "Multi-tenant: page IDs are routed to their owning tenant via meta_credentials table",
     }), 200
 
 
@@ -135,92 +146,99 @@ def verify_webhook():
     token     = request.args.get("hub.verify_token")
     challenge = request.args.get("hub.challenge")
 
-    logger.info("WEBHOOK VERIFY: mode=%s token=%s challenge=%s", mode, token, challenge)
-    logger.info("Expected token: %s", VERIFY_TOKEN)
+    logger.info("WEBHOOK VERIFY: mode=%s token=%s", mode, token)
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        logger.info("Webhook verified successfully.")
+    # Try to find credentials with this verify token
+    creds = _get_creds_for_verify_token(token)
+    expected = creds.webhook_verify_token if creds else os.getenv("META_WEBHOOK_VERIFY_TOKEN", "my_verify_token")
+
+    if mode == "subscribe" and token == expected:
+        logger.info("Webhook verified for tenant %s.", creds.tenant_id if creds else "default")
         return challenge, 200
     return jsonify({"error": "Verification failed"}), 403
 
 
 @webhook_bp.route("/meta", methods=["POST"])
 def receive_webhook():
-    """Process incoming Facebook / Instagram webhook events."""
+    """Process incoming Facebook / Instagram webhook events — multi-tenant."""
     raw = request.get_data()
     sig = request.headers.get("X-Hub-Signature-256", "")
+    body = request.get_json(silent=True) or {}
 
-    logger.info("========================================")
-    logger.info("WEBHOOK RECEIVED")
-    logger.info("Method: %s", request.method)
-    logger.info("URL: %s", request.url)
-    logger.info("Headers: %s", dict(request.headers))
-    logger.info("Body (first 2000 chars): %s", raw[:2000])
-    logger.info("Signature: %s", sig[:50] if sig else "NONE")
-    logger.info("========================================")
+    logger.info("WEBHOOK RECEIVED — body keys: %s", list(body.keys()))
 
-    if not _verify_signature(raw, sig):
-        logger.warning("Invalid webhook signature — request rejected.")
+    # Find tenant from the first entry's page ID
+    entry = (body.get("entry") or [{}])[0]
+    page_id = entry.get("id", "")
+
+    tenant, creds = _get_tenant_for_page(page_id)
+    if not tenant or not creds:
+        logger.warning("No tenant found for page_id=%s. Dropping webhook.", page_id)
+        return jsonify({"received": True}), 200  # silent ack
+
+    # Verify signature using this tenant's app_secret
+    app_secret = creds.app_secret or ""
+    if not _verify_signature(raw, sig, app_secret):
+        logger.warning("Invalid webhook signature for tenant %d — rejected.", tenant.id)
         return jsonify({"error": "Bad signature"}), 403
 
-    body = request.get_json(silent=True)
-    if not body:
-        logger.warning("Could not parse request body as JSON")
-        logger.warning("Raw body: %s", raw[:500])
-        return jsonify({"error": "Invalid JSON"}), 400
-
-    logger.info("Parsed body: %s", json.dumps(body, indent=2)[:3000])
-
-    clf     = current_app.config["CLASSIFIER"]
-    flagged = 0
-
+    clf = current_app.config["CLASSIFIER"]
     comments = _extract_comments(body)
-    logger.info("Extracted %d comments from webhook payload", len(comments))
+    flagged = 0
+    db = SessionLocal()
 
-    if len(comments) == 0:
-        logger.warning("No comments extracted! Payload structure might be unexpected.")
-        logger.warning("Body object type: %s", body.get("object"))
-        logger.warning("Body entry count: %d", len(body.get("entry", [])))
-        for i, entry in enumerate(body.get("entry", [])):
-            logger.warning("Entry %d: changes=%s, messaging=%s", i,
-                         len(entry.get("changes", [])), len(entry.get("messaging", [])))
-            for j, change in enumerate(entry.get("changes", [])):
-                logger.warning("  Change %d: field=%s, value=%s", j,
-                             change.get("field"), json.dumps(change.get("value", {}))[:500])
+    try:
+        for comment in comments:
+            text = comment.get("text", "").strip()
+            if not text:
+                continue
 
-    for comment in comments:
-        logger.info("Processing: platform=%s author=%s text=%s",
-                     comment["platform"], comment["from_name"], comment["text"][:100])
-        if not comment["text"].strip():
-            logger.info("Skipping empty comment")
-            continue
-        result = _process_comment(clf, comment)
-        logger.info("Result: label=%s confidence=%.2f harmful=%s",
-                     result.get("label"), result.get("confidence", 0), result.get("is_harmful"))
-        if result.get("is_harmful"):
-            flagged += 1
+            result = clf.predict(text)
 
-    logger.info("Webhook done — %d flagged out of %d comments", flagged, len(comments))
+            flag = Flag(
+                tenant_id    = tenant.id,
+                text         = text,
+                label        = result.label,
+                label_id     = result.label_id,
+                confidence   = result.confidence,
+                severity     = result.severity,
+                color        = result.color,
+                is_harmful   = result.is_harmful,
+                source       = comment.get("platform", "webhook"),
+                author       = comment.get("from_name", "unknown"),
+                author_id    = comment.get("from_id", ""),
+                platform     = comment.get("platform"),
+                comment_id   = comment.get("comment_id"),
+                auto_flagged = True,
+            )
+            db.add(flag)
+
+            if result.is_harmful:
+                flagged += 1
+                logger.warning(
+                    "FLAGGED [%s] tenant=%d @%s: %.50s",
+                    result.label, tenant.id, comment.get("from_name"), text,
+                )
+
+        db.commit()
+        logger.info("Webhook done — %d flagged out of %d for tenant %d", flagged, len(comments), tenant.id)
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Webhook processing failed: %s", exc)
+    finally:
+        db.close()
+
     return jsonify({"received": True, "flagged": flagged}), 200
 
 
-# ── Simulate endpoint (dev/demo only) ─────────────────────────────────────────
-
 @webhook_bp.route("/simulate", methods=["POST"])
 def simulate():
-    """
-    Simulate a webhook event without a real Meta connection.
-    Body: {"text": "...", "platform": "instagram", "author": "testuser"}
-
-    NOTE: Does NOT re-route through receive_webhook() — that would require
-    patching Flask internals (request._cached_json) which breaks in Flask 3+.
-    Instead we call clf.predict() directly and share the same _process_comment
-    helper so behaviour is identical.
-    """
+    """Simulate a webhook event without a real Meta connection."""
     data     = request.get_json(silent=True) or {}
     text     = (data.get("text") or "").strip()
     platform = data.get("platform", "instagram")
-    author   = data.get("author",   "testuser")
+    author   = data.get("author", "testuser")
+    tenant_id = data.get("tenant_id")
 
     if not text:
         return jsonify({"error": "Field 'text' is required"}), 400
@@ -234,58 +252,46 @@ def simulate():
     }
 
     clf    = current_app.config["CLASSIFIER"]
-    result = _process_comment(clf, comment)
-    return jsonify(result), 200
-
-
-def _process_comment(clf, comment: dict) -> dict:
-    """
-    Shared logic: run classifier on a comment dict, persist to DB,
-    and return a serialisable result dict.
-    Used by both receive_webhook() and simulate().
-    All comments are saved (harmful and clean) so they appear in the Live Feed.
-    """
-
-    text   = comment["text"].strip()
     result = clf.predict(text)
 
-    payload = {
-        **comment,
-        **result.to_dict(),
-        "auto_flagged": True,
-    }
-
+    # Find a tenant to associate (default to first if not specified)
     db = SessionLocal()
     try:
+        if tenant_id:
+            tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        else:
+            tenant = db.query(Tenant).first()
+
+        if not tenant:
+            return jsonify({"error": "No tenant found"}), 400
+
         flag = Flag(
-            text          = text,
-            label         = result.label,
-            label_id      = result.label_id,
-            confidence    = result.confidence,
-            severity      = result.severity,
-            color         = result.color,
-            is_harmful    = result.is_harmful,
-            trigger_words = json.dumps(result.trigger_words) if result.trigger_words else None,
-            source        = comment.get("platform", "webhook"),
-            author        = comment.get("from_name", "unknown"),
-            author_id     = comment.get("from_id", ""),
-            platform      = comment.get("platform"),
-            comment_id    = comment.get("comment_id"),
-            auto_flagged  = True,
+            tenant_id    = tenant.id,
+            text         = text,
+            label        = result.label,
+            label_id     = result.label_id,
+            confidence   = result.confidence,
+            severity     = result.severity,
+            color        = result.color,
+            is_harmful   = result.is_harmful,
+            source       = platform,
+            author       = author,
+            comment_id   = comment["comment_id"],
+            auto_flagged = True,
         )
         db.add(flag)
         db.commit()
         db.refresh(flag)
-        payload["id"] = flag.id
-        if result.is_harmful:
-            logger.warning(
-                "FLAGGED [%s] from @%s on %s: %.50s…",
-                result.label, comment.get("from_name"), comment.get("platform"), text,
-            )
+
+        return jsonify({
+            "id": flag.id,
+            **comment,
+            **result.to_dict(),
+            "tenant_id": tenant.id,
+        }), 200
     except Exception as exc:
         db.rollback()
-        logger.error("DB write failed in _process_comment: %s", exc)
+        logger.exception("Simulate failed: %s", exc)
+        return jsonify({"error": str(exc)}), 500
     finally:
         db.close()
-
-    return payload

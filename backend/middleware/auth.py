@@ -3,7 +3,7 @@ JWT authentication middleware for Flask.
 
 Usage
 -----
-from middleware.auth import require_auth, require_admin
+from middleware.auth import require_auth, require_admin, require_role
 
 @app.route("/protected")
 @require_auth
@@ -38,11 +38,12 @@ JWT_REFRESH_D = int(os.getenv("JWT_REFRESH_DAYS", "30"))
 def generate_access_token(user: User) -> str:
     """Create a short-lived access token."""
     payload = {
-        "sub":  str(user.id),
-        "role": user.role,
-        "exp":  datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_H),
-        "iat":  datetime.now(timezone.utc),
-        "type": "access",
+        "sub":       str(user.id),
+        "role":      user.role,
+        "tenant_id": user.tenant_id,
+        "exp":       datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_H),
+        "iat":       datetime.now(timezone.utc),
+        "type":      "access",
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -50,10 +51,12 @@ def generate_access_token(user: User) -> str:
 def generate_refresh_token(user: User) -> str:
     """Create a long-lived refresh token."""
     payload = {
-        "sub":  str(user.id),
-        "exp":  datetime.now(timezone.utc) + timedelta(days=JWT_REFRESH_D),
-        "iat":  datetime.now(timezone.utc),
-        "type": "refresh",
+        "sub":       str(user.id),
+        "role":      user.role,
+        "tenant_id": user.tenant_id,
+        "exp":       datetime.now(timezone.utc) + timedelta(days=JWT_REFRESH_D),
+        "iat":       datetime.now(timezone.utc),
+        "type":      "refresh",
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -104,12 +107,32 @@ def require_auth(f):
 
 
 def require_admin(f):
-    """Decorator: admin role required. Must be stacked after @require_auth."""
+    """Decorator: super_admin or admin role required. Must be stacked after @require_auth."""
     @wraps(f)
     def decorated(*args, **kwargs):
         user = getattr(g, "current_user", None)
-        if not user or user.role != "admin":
+        if not user or user.role not in ("super_admin", "admin"):
             return jsonify({"error": "Admin access required"}), 403
         return f(*args, **kwargs)
 
     return decorated
+
+
+def require_role(*roles: str):
+    """Decorator factory: require one of the specified roles.
+    Must be stacked after @require_auth.
+
+    Usage:
+        @require_role("admin", "manager")
+        def my_view(): ...
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            user = getattr(g, "current_user", None)
+            if not user or user.role not in roles:
+                rlist = ", ".join(roles)
+                return jsonify({"error": f"Requires one of these roles: {rlist}"}), 403
+            return f(*args, **kwargs)
+        return decorated
+    return decorator

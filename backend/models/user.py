@@ -1,8 +1,10 @@
 """
 User model — SQLAlchemy ORM for multi-user authentication.
 
-Fields:
-  id, username, email, password_hash, role, is_active, created_at
+Roles:
+  super_admin  — manages the whole system (creates tenants)
+  admin        — owns a tenant, sets Meta creds, creates managers
+  manager      — read-only access to a tenant's dashboard + live feed
 """
 
 from __future__ import annotations
@@ -11,9 +13,13 @@ import re
 from datetime import datetime, timezone
 
 import bcrypt
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
 
 from models.database import Base
+
+
+VALID_ROLES = {"super_admin", "admin", "manager"}
 
 
 class User(Base):
@@ -22,12 +28,15 @@ class User(Base):
     __tablename__ = "users"
 
     id            = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id     = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     username      = Column(String(64),  nullable=False, unique=True, index=True)
     email         = Column(String(256), nullable=False, unique=True, index=True)
     password_hash = Column(String(256), nullable=False)
-    role          = Column(String(16),  nullable=False, default="user")  # admin | user
+    role          = Column(String(16),  nullable=False, default="admin")  # super_admin | admin | manager
     is_active     = Column(Boolean,     default=True)
     created_at    = Column(DateTime,    default=lambda: datetime.now(timezone.utc))
+
+    tenant = relationship("Tenant", backref="users")
 
     # ── Password helpers ──────────────────────────────────────────────────────
 
@@ -53,6 +62,7 @@ class User(Base):
             "username":   self.username,
             "email":      self.email,
             "role":       self.role,
+            "tenant_id":  self.tenant_id,
             "is_active":  self.is_active,
             "created_at": int(self.created_at.timestamp()) if self.created_at else None,
         }
