@@ -1,9 +1,15 @@
+databases:
+  - name: cyberguard-db
+    databaseName: cyberguard
+    plan: free
+    ipAllowList: []
+
 services:
-  # ── Backend API ──────────────────────────────────────────
+  # ── Backend API + Frontend ────────────────────────────────
   - type: web
-    name: cyberguard-api
+    name: cyberguard
     env: python
-    buildCommand: pip install -r backend/requirements-render.txt
+    buildCommand: cd frontend && npm ci && npm run build && cd ../backend && pip install -r requirements-render.txt
     startCommand: cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --preload --log-level info
     envVars:
       - key: USE_TRANSFORMER
@@ -11,30 +17,12 @@ services:
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: ADMIN_PASSWORD
-        generateValue: true
-      - key: DATABASE_URL
-        value: "sqlite:///cyberguard.db"
+        value: admin123456  # CHANGE THIS
       - key: ALLOWED_ORIGINS
         value: "*"
-      - fromGroup: cyberguard-settings
-
-  # ── Frontend Static Site ─────────────────────────────────
-  - type: static
-    name: cyberguard-frontend
-    buildCommand: cd frontend && npm ci && npm run build
-    publishPath: frontend/dist
-    envVars:
-      - key: VITE_API_URL
-        fromService:
-          name: cyberguard-api
-          type: web
-          property: url
-          path: /api
-    headers:
-      - path: /*
-        name: X-Frame-Options
-        value: DENY
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cyberguard-db
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: "3.11"
