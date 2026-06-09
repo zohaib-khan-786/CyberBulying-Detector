@@ -5,7 +5,8 @@ Entry point for the REST API server.
 
 import os
 import logging
-from flask import Flask, jsonify
+from pathlib import Path
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -58,6 +59,26 @@ def create_app() -> Flask:
     app.register_blueprint(dashboard_bp,  url_prefix="/api/dashboard")
     app.register_blueprint(moderation_bp, url_prefix="/api/moderation")
     app.register_blueprint(settings_bp,   url_prefix="/api/settings")
+
+    # ── Serve frontend static files (for single-service deployment) ──────────
+    _frontend_dir = Path(__file__).parent.parent / "frontend" / "dist"
+    if _frontend_dir.is_dir():
+        logger.info("Serving frontend from %s", _frontend_dir)
+
+        @app.route("/")
+        def index():
+            return send_from_directory(_frontend_dir, "index.html")
+
+        @app.route("/assets/<path:filename>")
+        def assets(filename):
+            return send_from_directory(_frontend_dir / "assets", filename)
+
+        @app.route("/<path:path>")
+        def frontend_fallback(path):
+            file = _frontend_dir / path
+            if file.is_file():
+                return send_from_directory(_frontend_dir, path)
+            return send_from_directory(_frontend_dir, "index.html")
 
     # ── Routes ────────────────────────────────────────────────────────────────
     @app.route("/api/health", methods=["GET"])
