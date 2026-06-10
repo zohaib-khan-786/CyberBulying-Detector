@@ -23,55 +23,71 @@ export default function LandingPage({ onLoginClick }) {
   const ctaRef = useRef(null);
 
   useEffect(() => {
-    const mm = gsap.matchMedia();
+    ScrollTrigger.refresh();
+    const ctx = gsap.context(() => {
+      const isDesktop = window.innerWidth > 768;
 
-    mm.add("(min-width: 769px)", () => {
-      const tl = gsap.timeline({ defaults: { ease: "power3.out", duration: 0.8 } });
-      tl.from(heroBadgeRef.current, { y: 30, opacity: 0 })
-        .from(heroTitleRef.current, { y: 40, opacity: 0 }, "-=0.5")
-        .from(heroSubRef.current, { y: 30, opacity: 0 }, "-=0.4")
-        .from(heroActionsRef.current, { y: 30, opacity: 0 }, "-=0.3")
-        .from(heroStatsRef.current, { y: 30, opacity: 0 }, "-=0.3");
+      if (isDesktop) {
+        gsap.from(heroBadgeRef.current, { y: 30, opacity: 0, duration: 0.8, ease: "power3.out" });
+        gsap.from(heroTitleRef.current, { y: 40, opacity: 0, duration: 0.8, ease: "power3.out", delay: 0.2 });
+        gsap.from(heroSubRef.current, { y: 30, opacity: 0, duration: 0.8, ease: "power3.out", delay: 0.35 });
+        gsap.from(heroActionsRef.current, { y: 30, opacity: 0, duration: 0.8, ease: "power3.out", delay: 0.5 });
+        gsap.from(heroStatsRef.current, { y: 30, opacity: 0, duration: 0.8, ease: "power3.out", delay: 0.65 });
+      } else {
+        gsap.set(heroBadgeRef.current, { opacity: 1 });
+        gsap.set(heroTitleRef.current, { opacity: 1 });
+        gsap.set(heroSubRef.current, { opacity: 1 });
+        gsap.set(heroActionsRef.current, { opacity: 1 });
+        gsap.set(heroStatsRef.current, { opacity: 1 });
+      }
 
-      const cards = featuresRef.current?.children;
-      if (cards?.length) {
-        gsap.from(cards, {
-          scrollTrigger: { trigger: featuresRef.current, start: "top 82%", toggleActions: "play none none reverse" },
-          y: 50, opacity: 0, duration: 0.6, stagger: 0.1, ease: "power3.out",
+      const setupScrollAnim = (container, opts = {}) => {
+        if (!container?.children?.length) return;
+        gsap.set(Array.from(container.children), { opacity: 0, y: opts.y || 40 });
+        gsap.to(Array.from(container.children), {
+          opacity: 1, y: 0, duration: opts.duration || 0.6,
+          stagger: opts.stagger || 0.1, ease: "power3.out",
+          scrollTrigger: {
+            trigger: container, start: "top 85%",
+            toggleActions: "play none none none",
+            once: true,
+          },
+        });
+      };
+
+      setupScrollAnim(featuresRef.current, { stagger: 0.08 });
+      setupScrollAnim(stepsRef.current, { stagger: 0.12 });
+
+      if (showcaseRef.current?.children?.length) {
+        gsap.set(Array.from(showcaseRef.current.children), { opacity: 0, y: 50 });
+        gsap.to(Array.from(showcaseRef.current.children), {
+          opacity: 1, y: 0, duration: 0.7, stagger: 0.12, ease: "power3.out",
+          scrollTrigger: { trigger: showcaseRef.current, start: "top 85%", toggleActions: "play none none none", once: true },
         });
       }
 
-      const steps = stepsRef.current?.children;
-      if (steps?.length) {
-        gsap.from(steps, {
-          scrollTrigger: { trigger: stepsRef.current, start: "top 82%", toggleActions: "play none none reverse" },
-          y: 50, opacity: 0, duration: 0.6, stagger: 0.15, ease: "power3.out",
+      if (faqRef.current?.children?.length) {
+        gsap.set(Array.from(faqRef.current.children), { opacity: 0, y: 30 });
+        gsap.to(Array.from(faqRef.current.children), {
+          opacity: 1, y: 0, duration: 0.5, stagger: 0.06, ease: "power3.out",
+          scrollTrigger: { trigger: faqRef.current, start: "top 85%", toggleActions: "play none none none", once: true },
         });
       }
 
-      const showcaseEls = showcaseRef.current?.children;
-      if (showcaseEls?.length) {
-        gsap.from(showcaseEls, {
-          scrollTrigger: { trigger: showcaseRef.current, start: "top 80%", toggleActions: "play none none reverse" },
-          y: 60, opacity: 0, duration: 0.7, stagger: 0.15, ease: "power3.out",
+      if (ctaRef.current) {
+        gsap.set(ctaRef.current, { opacity: 0, y: 40 });
+        gsap.to(ctaRef.current, {
+          opacity: 1, y: 0, duration: 0.8, ease: "power3.out",
+          scrollTrigger: { trigger: ctaRef.current, start: "top 85%", toggleActions: "play none none none", once: true },
         });
       }
-
-      const faqItems = faqRef.current?.children;
-      if (faqItems?.length) {
-        gsap.from(faqItems, {
-          scrollTrigger: { trigger: faqRef.current, start: "top 82%", toggleActions: "play none none reverse" },
-          y: 40, opacity: 0, duration: 0.5, stagger: 0.08, ease: "power3.out",
-        });
-      }
-
-      gsap.from(ctaRef.current, {
-        scrollTrigger: { trigger: ctaRef.current, start: "top 82%", toggleActions: "play none none reverse" },
-        y: 50, opacity: 0, duration: 0.8, ease: "power3.out",
-      });
     });
 
-    return () => mm.revert();
+    ScrollTrigger.refresh();
+    return () => {
+      ctx.revert();
+      ScrollTrigger.getAll().forEach(st => st.kill());
+    };
   }, []);
 
   function toggleTheme() {
