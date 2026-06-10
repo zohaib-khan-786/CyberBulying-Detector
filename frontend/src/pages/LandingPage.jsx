@@ -384,7 +384,7 @@ export default function LandingPage({ onLoginClick }) {
               </ol>
               <div className="guide-note">
                 <strong>Critical:</strong> Subscribe your Page to the app via:<br />
-                <code>curl -X POST "https://graph.facebook.com/v25.0/{PAGE_ID}/subscribed_apps" -d "subscribed_fields=feed,messages" -d "access_token={TOKEN}"</code>
+                <code>curl -X POST "https://graph.facebook.com/v25.0/YOUR_PAGE_ID/subscribed_apps" -d "subscribed_fields=feed,messages" -d "access_token=YOUR_TOKEN"</code>
                 <br />Without this, <strong>no events will arrive</strong>.
               </div>
             </div>
