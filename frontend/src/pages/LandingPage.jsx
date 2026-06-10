@@ -1,10 +1,78 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Shield, Sun, Moon, Menu, X, LogIn, AlertTriangle, BarChart3, Bell, Users, Radio, Layers, Globe, ChevronDown, ChevronRight, ArrowRight, Sparkles, ShieldCheck, Zap, TrendingUp } from "lucide-react";
+
+gsap.registerPlugin(ScrollTrigger);
 
 export default function LandingPage({ onLoginClick }) {
   const [dark, setDark] = useState(() => localStorage.getItem("theme") !== "light");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState(null);
+
+  const heroRef = useRef(null);
+  const heroBadgeRef = useRef(null);
+  const heroTitleRef = useRef(null);
+  const heroSubRef = useRef(null);
+  const heroActionsRef = useRef(null);
+  const heroStatsRef = useRef(null);
+  const featuresRef = useRef(null);
+  const stepsRef = useRef(null);
+  const showcaseRef = useRef(null);
+  const faqRef = useRef(null);
+  const ctaRef = useRef(null);
+
+  useEffect(() => {
+    const mm = gsap.matchMedia();
+
+    mm.add("(min-width: 769px)", () => {
+      const tl = gsap.timeline({ defaults: { ease: "power3.out", duration: 0.8 } });
+      tl.from(heroBadgeRef.current, { y: 30, opacity: 0 })
+        .from(heroTitleRef.current, { y: 40, opacity: 0 }, "-=0.5")
+        .from(heroSubRef.current, { y: 30, opacity: 0 }, "-=0.4")
+        .from(heroActionsRef.current, { y: 30, opacity: 0 }, "-=0.3")
+        .from(heroStatsRef.current, { y: 30, opacity: 0 }, "-=0.3");
+
+      const cards = featuresRef.current?.children;
+      if (cards?.length) {
+        gsap.from(cards, {
+          scrollTrigger: { trigger: featuresRef.current, start: "top 82%", toggleActions: "play none none reverse" },
+          y: 50, opacity: 0, duration: 0.6, stagger: 0.1, ease: "power3.out",
+        });
+      }
+
+      const steps = stepsRef.current?.children;
+      if (steps?.length) {
+        gsap.from(steps, {
+          scrollTrigger: { trigger: stepsRef.current, start: "top 82%", toggleActions: "play none none reverse" },
+          y: 50, opacity: 0, duration: 0.6, stagger: 0.15, ease: "power3.out",
+        });
+      }
+
+      const showcaseEls = showcaseRef.current?.children;
+      if (showcaseEls?.length) {
+        gsap.from(showcaseEls, {
+          scrollTrigger: { trigger: showcaseRef.current, start: "top 80%", toggleActions: "play none none reverse" },
+          y: 60, opacity: 0, duration: 0.7, stagger: 0.15, ease: "power3.out",
+        });
+      }
+
+      const faqItems = faqRef.current?.children;
+      if (faqItems?.length) {
+        gsap.from(faqItems, {
+          scrollTrigger: { trigger: faqRef.current, start: "top 82%", toggleActions: "play none none reverse" },
+          y: 40, opacity: 0, duration: 0.5, stagger: 0.08, ease: "power3.out",
+        });
+      }
+
+      gsap.from(ctaRef.current, {
+        scrollTrigger: { trigger: ctaRef.current, start: "top 82%", toggleActions: "play none none reverse" },
+        y: 50, opacity: 0, duration: 0.8, ease: "power3.out",
+      });
+    });
+
+    return () => mm.revert();
+  }, []);
 
   function toggleTheme() {
     const next = !dark;
@@ -69,21 +137,21 @@ export default function LandingPage({ onLoginClick }) {
       </nav>
 
       {/* ── Hero ─────────────────────────────────────────────── */}
-      <section className="landing-hero">
+      <section className="landing-hero" ref={heroRef}>
         <div className="landing-hero-glow" />
         <div className="landing-hero-content">
-          <div className="landing-badge">
+          <div className="landing-badge" ref={heroBadgeRef}>
             <Sparkles size={14} /> AI-Powered Content Moderation
           </div>
-          <h1 className="landing-hero-title">
+          <h1 className="landing-hero-title" ref={heroTitleRef}>
             Protect Your Community<br />
             <span className="gradient-text">with Intelligent Detection</span>
           </h1>
-          <p className="landing-hero-sub">
+          <p className="landing-hero-sub" ref={heroSubRef}>
             CyberGuard uses advanced AI to automatically detect cyberbullying, harassment, and hate speech 
             across your social platforms. Real-time monitoring, actionable insights, and multi-language support.
           </p>
-          <div className="landing-hero-actions">
+          <div className="landing-hero-actions" ref={heroActionsRef}>
             <button className="landing-cta-primary" onClick={onLoginClick}>
               Get Started Free <ArrowRight size={18} />
             </button>
@@ -91,7 +159,7 @@ export default function LandingPage({ onLoginClick }) {
               Learn More
             </a>
           </div>
-          <div className="landing-hero-stats">
+          <div className="landing-hero-stats" ref={heroStatsRef}>
             <div className="hero-stat">
               <span className="hero-stat-value">94%+</span>
               <span className="hero-stat-label">Detection Accuracy</span>
@@ -114,7 +182,7 @@ export default function LandingPage({ onLoginClick }) {
           <h2>Everything you need for<br /><span className="gradient-text">safer communities</span></h2>
           <p>Built for moderators, community managers, and platform owners who take online safety seriously.</p>
         </div>
-        <div className="features-grid">
+        <div className="features-grid" ref={featuresRef}>
           {features.map((f, i) => {
             const Icon = f.icon;
             return (
@@ -134,7 +202,7 @@ export default function LandingPage({ onLoginClick }) {
           <h2>Four simple steps to<br /><span className="gradient-text">safer communities</span></h2>
           <p>Get started in minutes, not days. No technical expertise required.</p>
         </div>
-        <div className="steps-grid">
+        <div className="steps-grid" ref={stepsRef}>
           {steps.map((s, i) => (
             <div key={i} className="step-card">
               <div className="step-number">{s.num}</div>
@@ -151,7 +219,7 @@ export default function LandingPage({ onLoginClick }) {
           <h2>A glimpse of<br /><span className="gradient-text">what's inside</span></h2>
           <p>Beautifully designed dashboards that make moderation effortless.</p>
         </div>
-        <div className="showcase-grid">
+        <div className="showcase-grid" ref={showcaseRef}>
           <div className="showcase-card">
             <div className="showcase-card-header">
               <div className="showcase-dot" style={{ background: "#EF4444" }} />
@@ -205,7 +273,7 @@ export default function LandingPage({ onLoginClick }) {
         <div className="landing-section-header">
           <h2>Got questions?<br /><span className="gradient-text">We've got answers</span></h2>
         </div>
-        <div className="faq-list">
+        <div className="faq-list" ref={faqRef}>
           {faqs.map((faq, i) => (
             <div key={i} className={`faq-item ${openFaq === i ? "open" : ""}`}>
               <button className="faq-question" onClick={() => setOpenFaq(openFaq === i ? null : i)}>
@@ -221,7 +289,7 @@ export default function LandingPage({ onLoginClick }) {
       </section>
 
       {/* ── CTA ───────────────────────────────────────────────── */}
-      <section className="landing-cta-section">
+      <section className="landing-cta-section" ref={ctaRef}>
         <div className="landing-cta-glow" />
         <div className="landing-cta-content">
           <h2>Ready to protect your community?</h2>
