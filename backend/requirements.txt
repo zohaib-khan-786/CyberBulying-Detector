@@ -10,7 +10,7 @@ python-dotenv==1.0.1
 sqlalchemy==2.0.30
 # Uncomment the driver you need:
 # mysql-connector-python==8.4.0        # MySQL
-# psycopg2-binary==2.9.9               # PostgreSQL
+psycopg2-binary==2.9.9               # PostgreSQL
 # (SQLite is built into Python — no driver needed for local dev)
 
 # ML — classical (default stack)

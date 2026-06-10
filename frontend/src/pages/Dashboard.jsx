@@ -12,6 +12,22 @@ import {
 } from "lucide-react";
 import { API_BASE, authFetch } from "../config";
 
+function tooltipStyle() {
+  const isLight = document.documentElement.getAttribute("data-theme") === "light";
+  return {
+    background: isLight ? "#fff" : "#0F1422",
+    border: isLight ? "1px solid rgba(0,0,0,0.08)" : "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 8,
+    fontSize: 12,
+    color: isLight ? "#0F172A" : "#E2E8F0",
+  };
+}
+
+function gridStroke() {
+  const isLight = document.documentElement.getAttribute("data-theme") === "light";
+  return isLight ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.04)";
+}
+
 const LABEL_COLORS = {
   clean:          "#22c55e",
   cyberbullying:  "#f59e0b",
@@ -237,12 +253,12 @@ export default function Dashboard() {
                     </linearGradient>
                   ))}
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="hour" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke()} />
+                <XAxis dataKey="hour" tick={{ fill: "var(--text-dim)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "var(--text-dim)", fontSize: 10 }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ background: "#0f1729", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 12 }}
-                  labelStyle={{ color: "#94a3b8" }}
+                  contentStyle={tooltipStyle()}
+                  labelStyle={{ color: "var(--text-muted)" }}
                 />
                 {chartLabels.map(lbl => (
                   <Area
@@ -294,7 +310,7 @@ export default function Dashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ background: "#0f1729", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 12 }}
+                    contentStyle={tooltipStyle()}
                     formatter={(val, name) => [`${val} (${((val / totalCategory) * 100).toFixed(1)}%)`, name]}
                   />
                 </PieChart>
@@ -392,11 +408,11 @@ export default function Dashboard() {
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={activity.top_users} layout="vertical" margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal={false} />
-                <XAxis type="number" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis dataKey="author" type="category" width={100} tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke()} horizontal={false} />
+                <XAxis type="number" tick={{ fill: "var(--text-dim)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis dataKey="author" type="category" width={100} tick={{ fill: "var(--text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ background: "#0f1729", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 12 }}
+                  contentStyle={tooltipStyle()}
                   formatter={(val) => [`${val} flags`, "Count"]}
                 />
                 <Bar dataKey="count" fill="#ef4444" radius={[0, 4, 4, 0]} />

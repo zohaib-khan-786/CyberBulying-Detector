@@ -18,7 +18,7 @@ export default function ModeratedUsers() {
   const [loading, setLoading]   = useState(true);
   const [toast, setToast]       = useState("");
   const currentUser = getCurrentUser();
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = currentUser?.role === "super_admin" || currentUser?.role === "admin";
 
   useEffect(() => { fetchUsers(); }, [page]);
 

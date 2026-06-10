@@ -9,9 +9,10 @@ export default function Users() {
   const [error, setError]       = useState("");
   const [actionMsg, setActionMsg] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [newUser, setNewUser] = useState({ username: "", email: "", password: "", role: "manager" });
+  const [newUser, setNewUser] = useState({ username: "", email: "", password: "", role: "manager", tenant_name: "", tenant_id: "" });
   const currentUser = getCurrentUser();
-  const isAdmin = currentUser?.role === "super_admin" || currentUser?.role === "admin";
+  const isSuperAdmin = currentUser?.role === "super_admin";
+  const isAdmin = isSuperAdmin || currentUser?.role === "admin";
 
   useEffect(() => {
     fetchUsers();
@@ -138,9 +139,21 @@ export default function Users() {
             <label>Role</label>
             <select value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}>
               <option value="manager">Manager (read-only)</option>
-              <option value="admin">Admin (full access)</option>
+              {isSuperAdmin && <option value="admin">Admin (full access)</option>}
             </select>
           </div>
+          {isSuperAdmin && newUser.role === "admin" && (
+            <div className="field">
+              <label>Workspace Name</label>
+              <input placeholder={`${newUser.username || "user"}-workspace`} value={newUser.tenant_name} onChange={e => setNewUser(p => ({ ...p, tenant_name: e.target.value }))} />
+            </div>
+          )}
+          {isSuperAdmin && newUser.role === "manager" && (
+            <div className="field">
+              <label>Tenant ID</label>
+              <input required type="number" min={1} placeholder="e.g. 2" value={newUser.tenant_id} onChange={e => setNewUser(p => ({ ...p, tenant_id: e.target.value }))} />
+            </div>
+          )}
           <button type="submit" className="btn btn-primary">Create User</button>
         </form>
       )}

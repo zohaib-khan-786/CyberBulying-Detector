@@ -1,15 +1,23 @@
 import { useState } from "react";
-import { Shield } from "lucide-react";
+import { Shield, Sun, Moon } from "lucide-react";
 import { API_BASE } from "../config";
 
 export default function Login({ onLogin }) {
-  const [mode, setMode]         = useState("login"); // login | register
+  const [mode, setMode]         = useState("login");
   const [username, setUsername]   = useState("");
   const [email, setEmail]         = useState("");
   const [password, setPassword]   = useState("");
   const [tenantName, setTenantName] = useState("");
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState("");
+  const [dark, setDark]           = useState(() => localStorage.getItem("theme") !== "light");
+
+  function toggleTheme() {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.setAttribute("data-theme", next ? "dark" : "light");
+    localStorage.setItem("theme", next ? "dark" : "light");
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -19,7 +27,10 @@ export default function Login({ onLogin }) {
     try {
       const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
       const body = { username, password };
-      if (mode === "register") { body.email = email; body.tenant_name = tenantName || username; }
+      if (mode === "register") {
+        body.email = email;
+        body.tenant_name = tenantName || username;
+      }
 
       const res = await fetch(`${API_BASE}${endpoint}`, {
         method:  "POST",
@@ -31,7 +42,6 @@ export default function Login({ onLogin }) {
       if (!res.ok) throw new Error(data.error || "Request failed");
 
       if (mode === "register") {
-        // Auto-login after registration
         const loginRes = await fetch(`${API_BASE}/auth/login`, {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
@@ -59,13 +69,18 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="login-wrapper">
+      <div className="login-theme">
+        <button onClick={toggleTheme} title={dark ? "Light mode" : "Dark mode"}>
+          {dark ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+      </div>
       <div className="login-card">
         <div className="login-brand">
           <div className="login-icon-wrap">
             <Shield size={32} strokeWidth={1.5} />
           </div>
-          <h1>CyberGuard</h1>
-          <p>Cyberbullying Detection System</p>
+          <h1>AI-Powered</h1>
+          <p>Cyberbullying Detection</p>
         </div>
 
         <div className="login-tabs">
@@ -125,13 +140,11 @@ export default function Login({ onLogin }) {
           {error && <div className="login-error">{error}</div>}
 
           <button type="submit" className="login-btn" disabled={loading}>
-            {loading ? "Please wait…" : mode === "login" ? "Sign In" : "Create Account"}
+            {loading ? "Please wait\u2026" : mode === "login" ? "Sign In" : "Create Account"}
           </button>
         </form>
 
-        <p className="login-hint">
-          Default admin: <code>admin</code> / <code>admin123456</code>
-        </p>
+
       </div>
     </div>
   );

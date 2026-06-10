@@ -15,6 +15,7 @@ WORKDIR /app
 # Install system dependencies (nginx + build tools for pip)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
+    gettext-base \
     build-essential \
     gcc \
     && rm -rf /var/lib/apt/lists/* \
@@ -37,6 +38,7 @@ RUN pip install --no-cache-dir \
     "bcrypt>=4.1.0" \
     "langdetect>=1.0.9" \
     requests==2.32.3 \
+    "psycopg2-binary>=2.9.9" \
     && rm -rf /root/.cache/pip
 
 RUN pip install --no-cache-dir \

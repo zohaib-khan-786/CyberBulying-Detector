@@ -167,68 +167,68 @@ def receive_webhook():
 
     logger.info("WEBHOOK RECEIVED — body keys: %s", list(body.keys()))
 
-    # Find tenant from the first entry's page ID
-    entry = (body.get("entry") or [{}])[0]
-    page_id = entry.get("id", "")
-
-    tenant, creds = _get_tenant_for_page(page_id)
-    if not tenant or not creds:
-        logger.warning("No tenant found for page_id=%s. Dropping webhook.", page_id)
-        return jsonify({"received": True}), 200  # silent ack
-
-    # Verify signature using this tenant's app_secret
-    app_secret = creds.app_secret or ""
-    if not _verify_signature(raw, sig, app_secret):
-        logger.warning("Invalid webhook signature for tenant %d — rejected.", tenant.id)
-        return jsonify({"error": "Bad signature"}), 403
-
     clf = current_app.config["CLASSIFIER"]
-    comments = _extract_comments(body)
-    flagged = 0
+    entries = body.get("entry", [])
     db = SessionLocal()
 
     try:
-        for comment in comments:
-            text = comment.get("text", "").strip()
-            if not text:
+        for entry in entries:
+            page_id = entry.get("id", "")
+
+            tenant, creds = _get_tenant_for_page(page_id)
+            if not tenant or not creds:
+                logger.warning("No tenant found for page_id=%s. Skipping entry.", page_id)
                 continue
 
-            result = clf.predict(text)
+            # Verify signature using this tenant's app_secret
+            app_secret = creds.app_secret or ""
+            if not _verify_signature(raw, sig, app_secret):
+                logger.warning("Invalid webhook signature for tenant %d — rejected.", tenant.id)
+                continue
 
-            flag = Flag(
-                tenant_id    = tenant.id,
-                text         = text,
-                label        = result.label,
-                label_id     = result.label_id,
-                confidence   = result.confidence,
-                severity     = result.severity,
-                color        = result.color,
-                is_harmful   = result.is_harmful,
-                source       = comment.get("platform", "webhook"),
-                author       = comment.get("from_name", "unknown"),
-                author_id    = comment.get("from_id", ""),
-                platform     = comment.get("platform"),
-                comment_id   = comment.get("comment_id"),
-                auto_flagged = True,
-            )
-            db.add(flag)
+            comments = _extract_comments({"entry": [entry]})
+            flagged = 0
 
-            if result.is_harmful:
-                flagged += 1
-                logger.warning(
-                    "FLAGGED [%s] tenant=%d @%s: %.50s",
-                    result.label, tenant.id, comment.get("from_name"), text,
+            for comment in comments:
+                text = comment.get("text", "").strip()
+                if not text:
+                    continue
+
+                result = clf.predict(text)
+
+                flag = Flag(
+                    tenant_id    = tenant.id,
+                    text         = text,
+                    label        = result.label,
+                    label_id     = result.label_id,
+                    confidence   = result.confidence,
+                    severity     = result.severity,
+                    color        = result.color,
+                    is_harmful   = result.is_harmful,
+                    source       = comment.get("platform", "webhook"),
+                    author       = comment.get("from_name", "unknown"),
+                    author_id    = comment.get("from_id", ""),
+                    platform     = comment.get("platform"),
+                    comment_id   = comment.get("comment_id"),
+                    auto_flagged = True,
                 )
+                db.add(flag)
 
-        db.commit()
-        logger.info("Webhook done — %d flagged out of %d for tenant %d", flagged, len(comments), tenant.id)
+                if result.is_harmful:
+                    flagged += 1
+
+            db.commit()
+            if flagged or comments:
+                logger.info("Webhook entry for tenant %d — %d flagged out of %d", tenant.id, flagged, len(comments))
+
+        return jsonify({"received": True}), 200
+
     except Exception as exc:
         db.rollback()
         logger.exception("Webhook processing failed: %s", exc)
+        return jsonify({"received": True}), 200  # silent ack
     finally:
         db.close()
-
-    return jsonify({"received": True, "flagged": flagged}), 200
 
 
 @webhook_bp.route("/simulate", methods=["POST"])

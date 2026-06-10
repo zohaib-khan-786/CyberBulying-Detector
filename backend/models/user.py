@@ -10,10 +10,11 @@ Roles:
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timezone, timedelta
 
 import bcrypt
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from models.database import Base
@@ -34,7 +35,9 @@ class User(Base):
     password_hash = Column(String(256), nullable=False)
     role          = Column(String(16),  nullable=False, default="admin")  # super_admin | admin | manager
     is_active     = Column(Boolean,     default=True)
-    created_at    = Column(DateTime,    default=lambda: datetime.now(timezone.utc))
+    created_at         = Column(DateTime,    default=lambda: datetime.now(timezone.utc))
+    reset_token        = Column(String(128), nullable=True, index=True)
+    reset_token_expiry = Column(DateTime,    nullable=True)
 
     tenant = relationship("Tenant", backref="users")
 
@@ -53,6 +56,27 @@ class User(Base):
             raw_password.encode("utf-8"),
             self.password_hash.encode("utf-8"),
         )
+
+    # ── Password reset ──────────────────────────────────────────────────────
+
+    def generate_reset_token(self) -> str:
+        token = secrets.token_urlsafe(32)
+        self.reset_token = token
+        self.reset_token_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+        return token
+
+    def verify_reset_token(self, token: str) -> bool:
+        if not self.reset_token or not self.reset_token_expiry:
+            return False
+        if self.reset_token != token:
+            return False
+        if datetime.now(timezone.utc) > self.reset_token_expiry:
+            return False
+        return True
+
+    def clear_reset_token(self) -> None:
+        self.reset_token = None
+        self.reset_token_expiry = None
 
     # ── Serialisation ─────────────────────────────────────────────────────────
 

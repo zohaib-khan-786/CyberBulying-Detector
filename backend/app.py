@@ -121,7 +121,7 @@ def _ensure_default_tenant():
         admin_password = os.getenv("ADMIN_PASSWORD", "admin123456")
         super_admin = User(
             username=admin_username,
-            email=f"{admin_username}@cyberguard.local",
+            email=f"{admin_username}@aicyberbullying.local",
             role="super_admin",
             tenant_id=tenant.id,
         )
@@ -141,7 +141,7 @@ _PRIVACY_POLICY_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Policy - CyberGuard</title>
+  <title>Privacy Policy - AI-powered Cyberbullying Detection</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #080c10; color: #e2e8f0; line-height: 1.7; padding: 40px 20px; }
@@ -159,9 +159,9 @@ _PRIVACY_POLICY_HTML = """<!DOCTYPE html>
     <h1>Privacy Policy</h1>
     <p class="updated">Last updated: May 17, 2026</p>
     <h2>1. Introduction</h2>
-    <p>CyberGuard is a cyberbullying detection system that monitors and analyzes text content from social media platforms to identify harmful content. This Privacy Policy explains how we collect, use, and protect information.</p>
+    <p>AI-powered Cyberbullying Detection is a cyberbullying detection system that monitors and analyzes text content from social media platforms to identify harmful content. This Privacy Policy explains how we collect, use, and protect information.</p>
     <h2>2. Information We Collect</h2>
-    <p>When you connect your Facebook Page or Instagram Account to CyberGuard, we collect:</p>
+    <p>When you connect your Facebook Page or Instagram Account to AI-powered Cyberbullying Detection, we collect:</p>
     <ul>
       <li><strong>Comment Text:</strong> The text content of comments on your connected social media posts</li>
       <li><strong>Comment Author:</strong> The username of the person who posted the comment</li>
@@ -190,7 +190,7 @@ _PRIVACY_POLICY_HTML = """<!DOCTYPE html>
       <li>We delete Meta data when no longer needed</li>
     </ul>
     <h2>7. Contact Us</h2>
-    <p>Contact: <a href="mailto:privacy@cyberguard.app">privacy@cyberguard.app</a></p>
+    <p>Contact: <a href="mailto:privacy@aicyberbullying.app">privacy@aicyberbullying.app</a></p>
   </div>
 </body>
 </html>"""

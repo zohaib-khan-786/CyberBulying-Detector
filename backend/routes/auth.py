@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 
 from models.database import SessionLocal, Tenant
 from models.user import User, VALID_ROLES
+from utils.email import send_password_reset_email, is_smtp_configured
 from middleware.auth import (
     require_auth,
     require_admin,
@@ -142,6 +143,82 @@ def refresh():
         db.close()
 
 
+# ── Forgot password ───────────────────────────────────────────────────────────
+
+@auth_bp.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return jsonify({"error": "No account found with that email"}), 404
+
+        token = user.generate_reset_token()
+        db.commit()
+        logger.info("Reset token generated for %s", email)
+
+        sent = send_password_reset_email(email, token)
+
+        if sent:
+            return jsonify({
+                "message": "Password reset link has been sent to your email.",
+            }), 200
+
+        if is_smtp_configured():
+            logger.error("SMTP is configured but email delivery failed for %s", email)
+            return jsonify({"error": "Failed to send email. Please contact support."}), 500
+
+        return jsonify({
+            "message": "Reset code generated",
+            "reset_token": token,
+            "note": "SMTP not configured. Save this code to reset your password.",
+        }), 200
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Forgot password failed: %s", exc)
+        return jsonify({"error": "Failed to process request"}), 500
+    finally:
+        db.close()
+
+
+@auth_bp.route("/reset-password", methods=["POST"])
+def reset_password():
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    new_password = data.get("new_password") or ""
+
+    if not token or not new_password:
+        return jsonify({"error": "Token and new_password are required"}), 400
+
+    err = User.validate_password(new_password)
+    if err:
+        return jsonify({"error": err}), 400
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.reset_token == token).first()
+        if not user or not user.verify_reset_token(token):
+            return jsonify({"error": "Invalid or expired reset token"}), 401
+
+        user.set_password(new_password)
+        user.clear_reset_token()
+        db.commit()
+        logger.info("Password reset for @%s", user.username)
+        return jsonify({"message": "Password reset successfully"}), 200
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Reset password failed: %s", exc)
+        return jsonify({"error": "Failed to reset password"}), 500
+    finally:
+        db.close()
+
+
 # ── List users (tenant-scoped) ────────────────────────────────────────────────
 
 @auth_bp.route("/users", methods=["GET"])
@@ -207,18 +284,43 @@ def create_user():
     db = g.get("db") or SessionLocal()
     close = "db" not in g
     try:
-        user = User(
-            username=username,
-            email=email,
-            role=role,
-            tenant_id=g.current_user.tenant_id,
-        )
-        user.set_password(password)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        logger.info("User @%s (role=%s) created by @%s.", username, role, g.current_user.username)
-        return jsonify({"user": user.to_dict()}), 201
+        if role == "admin" and g.current_user.role == "super_admin":
+            # Creating an admin → give them their own tenant
+            tenant_name = data.get("tenant_name") or f"{username}-workspace"
+            tenant = Tenant(name=tenant_name)
+            db.add(tenant)
+            db.flush()
+            user = User(username=username, email=email, role="admin", tenant_id=tenant.id)
+            user.set_password(password)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            logger.info("New tenant '%s' + admin '@%s' created by super_admin.", tenant_name, username)
+            return jsonify({"user": user.to_dict(), "tenant_name": tenant.name}), 201
+        else:
+            # Creating a manager → assign to a specific tenant
+            target_tenant_id = data.get("tenant_id") or g.current_user.tenant_id
+
+            # Super_admin must specify a tenant_id for managers
+            if g.current_user.role == "super_admin" and not data.get("tenant_id"):
+                return jsonify({"error": "super_admin must specify tenant_id when creating a manager"}), 400
+
+            # Verify the target tenant exists
+            tenant = db.query(Tenant).filter(Tenant.id == target_tenant_id).first()
+            if not tenant:
+                return jsonify({"error": "Tenant not found"}), 404
+
+            # Non-super-admin can only create managers in their own tenant
+            if g.current_user.role != "super_admin" and target_tenant_id != g.current_user.tenant_id:
+                return jsonify({"error": "You can only create users in your own tenant"}), 403
+
+            user = User(username=username, email=email, role="manager", tenant_id=target_tenant_id)
+            user.set_password(password)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            logger.info("Manager @%s created in tenant %s by @%s.", username, target_tenant_id, g.current_user.username)
+            return jsonify({"user": user.to_dict()}), 201
     except IntegrityError:
         db.rollback()
         return jsonify({"error": "Username or email already exists"}), 409
