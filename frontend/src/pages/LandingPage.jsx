@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { Shield, Sun, Moon, Menu, X, LogIn, AlertTriangle, BarChart3, Bell, Users, Radio, Layers, Globe, ChevronDown, ChevronRight, ArrowRight, Sparkles, ShieldCheck, Zap, TrendingUp } from "lucide-react";
+import { Shield, Sun, Moon, Menu, X, LogIn, AlertTriangle, BarChart3, Bell, Users, Radio, Layers, Globe, ChevronDown, ChevronRight, ArrowRight, Sparkles, ShieldCheck, Zap, TrendingUp, BookOpen, AppWindow, KeyRound, CheckCircle2, ExternalLink, Copy, FileText } from "lucide-react";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -9,6 +9,7 @@ export default function LandingPage({ onLoginClick }) {
   const [dark, setDark] = useState(() => localStorage.getItem("theme") !== "light");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState(null);
+  const [guideTab, setGuideTab] = useState("meta");
 
   const heroRef = useRef(null);
   const heroBadgeRef = useRef(null);
@@ -21,6 +22,7 @@ export default function LandingPage({ onLoginClick }) {
   const showcaseRef = useRef(null);
   const faqRef = useRef(null);
   const ctaRef = useRef(null);
+  const guideRef = useRef(null);
 
   useEffect(() => {
     ScrollTrigger.refresh();
@@ -71,6 +73,14 @@ export default function LandingPage({ onLoginClick }) {
         gsap.to(Array.from(faqRef.current.children), {
           opacity: 1, y: 0, duration: 0.5, stagger: 0.06, ease: "power3.out",
           scrollTrigger: { trigger: faqRef.current, start: "top 85%", toggleActions: "play none none none", once: true },
+        });
+      }
+
+      if (guideRef.current) {
+        gsap.set(guideRef.current, { opacity: 0, y: 40 });
+        gsap.to(guideRef.current, {
+          opacity: 1, y: 0, duration: 0.7, ease: "power3.out",
+          scrollTrigger: { trigger: guideRef.current, start: "top 85%", toggleActions: "play none none none", once: true },
         });
       }
 
@@ -136,6 +146,7 @@ export default function LandingPage({ onLoginClick }) {
           <div className={`landing-nav-links ${mobileNavOpen ? "open" : ""}`}>
             <a href="#features" onClick={() => setMobileNavOpen(false)}>Features</a>
             <a href="#how-it-works" onClick={() => setMobileNavOpen(false)}>How It Works</a>
+            <a href="#guide" onClick={() => setMobileNavOpen(false)}>Guide</a>
             <a href="#faq" onClick={() => setMobileNavOpen(false)}>FAQ</a>
           </div>
           <div className="landing-nav-actions">
@@ -282,6 +293,186 @@ export default function LandingPage({ onLoginClick }) {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* ── Guide ──────────────────────────────────────────────── */}
+      <section id="guide" className="landing-section landing-section-alt" ref={guideRef}>
+        <div className="landing-section-header">
+          <h2>Complete<br /><span className="gradient-text">Guide &amp; Setup</span></h2>
+          <p>Everything you need to get CyberGuard up and running with your social platforms.</p>
+        </div>
+
+        <div className="guide-tabs">
+          <button className={`guide-tab ${guideTab === "meta" ? "active" : ""}`} onClick={() => setGuideTab("meta")}>
+            <KeyRound size={16} /> Meta API Setup
+          </button>
+          <button className={`guide-tab ${guideTab === "user" ? "active" : ""}`} onClick={() => setGuideTab("user")}>
+            <FileText size={16} /> User Guide
+          </button>
+        </div>
+
+        {guideTab === "meta" && (
+          <div className="guide-content">
+            <div className="guide-card">
+              <div className="guide-card-header"><AppWindow size={18} /> Prerequisites</div>
+              <ul className="guide-list">
+                <li>Personal Facebook account</li>
+                <li>A Facebook Page you own or manage</li>
+                <li>Meta Developer Account (free)</li>
+                <li>ngrok installed (for local webhook testing)</li>
+              </ul>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><AppWindow size={18} /> 1. Create a Meta Developer Account</div>
+              <ol className="guide-list guide-list-num">
+                <li>Go to <a href="https://developers.facebook.com" target="_blank" rel="noopener">developers.facebook.com</a></li>
+                <li>Click <strong>"Get Started"</strong> and log in with your Facebook account</li>
+                <li>Accept the terms and verify your email</li>
+              </ol>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><AppWindow size={18} /> 2. Create a Meta App</div>
+              <ol className="guide-list guide-list-num">
+                <li>Go to <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com/apps</a></li>
+                <li>Click <strong>"Create App"</strong> and select <strong>"Business"</strong> as the app type</li>
+                <li>Name it <strong>CyberGuard</strong> and complete the security check</li>
+              </ol>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><KeyRound size={18} /> 3. Get App ID &amp; App Secret</div>
+              <ol className="guide-list guide-list-num">
+                <li>Go to <strong>Settings &gt; Basic</strong> in your app dashboard</li>
+                <li>Copy the <strong>App ID</strong> (visible immediately)</li>
+                <li>Click <strong>"Show"</strong> to reveal the <strong>App Secret</strong> (enter your Facebook password)</li>
+                <li>Add both to your <code>.env</code> file as <code>META_APP_ID</code> and <code>META_APP_SECRET</code></li>
+              </ol>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><KeyRound size={18} /> 4. Generate Access Tokens</div>
+              <p className="guide-p">Create a System User in <strong>Business Settings &gt; Users &gt; System Users</strong>:</p>
+              <ol className="guide-list guide-list-num">
+                <li>Click <strong>"Add"</strong>, name it <code>cyberguard-system</code>, role: <strong>Admin</strong></li>
+                <li>Add your Page as an asset with <strong>"Full Control"</strong></li>
+                <li>Click <strong>"Generate New Token"</strong>, select your app</li>
+                <li>Grant permissions: <code>pages_show_list</code>, <code>pages_read_engagement</code>, <code>pages_manage_posts</code>, <code>pages_manage_metadata</code>, <code>pages_read_user_content</code>, <code>pages_manage_engagement</code></li>
+                <li>Click <strong>"Generate Token"</strong> and copy it immediately</li>
+              </ol>
+              <p className="guide-p">This is your <strong>long-lived Page Access Token</strong>. Set it as <code>META_PAGE_ACCESS_TOKEN</code> in <code>.env</code>.</p>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><ExternalLink size={18} /> 5. Get Your Page ID</div>
+              <ol className="guide-list guide-list-num">
+                <li>Go to your Facebook Page &gt; <strong>"About"</strong> &gt; scroll to <strong>"Page Transparency"</strong></li>
+                <li>Copy the <strong>Page ID</strong> (a numeric value like <code>972933332575020</code>)</li>
+                <li>Set it as <code>META_PAGE_ID</code> in your <code>.env</code> file</li>
+              </ol>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><Radio size={18} /> 6. Set Up Webhooks</div>
+              <ol className="guide-list guide-list-num">
+                <li>Run <code>ngrok http 5000</code> to get a public HTTPS URL</li>
+                <li>Go to <strong>Products &gt; Webhooks</strong> in your app dashboard</li>
+                <li><strong>Callback URL:</strong> <code>https://your-ngrok-url.ngrok-free.dev/api/webhook/meta</code></li>
+                <li><strong>Verify Token:</strong> Set <code>META_WEBHOOK_VERIFY_TOKEN</code> in <code>.env</code> (any string)</li>
+                <li>Subscribe to webhook fields: <code>feed</code>, <code>messages</code></li>
+              </ol>
+              <div className="guide-note">
+                <strong>Critical:</strong> Subscribe your Page to the app via:<br />
+                <code>curl -X POST "https://graph.facebook.com/v25.0/{PAGE_ID}/subscribed_apps" -d "subscribed_fields=feed,messages" -d "access_token={TOKEN}"</code>
+                <br />Without this, <strong>no events will arrive</strong>.
+              </div>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><CheckCircle2 size={18} /> 7. Configure .env &amp; Test</div>
+              <div className="guide-env-block">
+                <code>META_APP_ID=your_app_id</code><br />
+                <code>META_APP_SECRET=your_app_secret</code><br />
+                <code>META_PAGE_ID=your_page_id</code><br />
+                <code>META_PAGE_ACCESS_TOKEN=your_token</code><br />
+                <code>META_WEBHOOK_VERIFY_TOKEN=your_verify_string</code>
+              </div>
+              <p className="guide-p">Test by commenting on your Page from a <strong>different Facebook account</strong> — admin self-comments are ignored by Meta.</p>
+            </div>
+          </div>
+        )}
+
+        {guideTab === "user" && (
+          <div className="guide-content">
+            <div className="guide-card">
+              <div className="guide-card-header"><BookOpen size={18} /> What Can CyberGuard Do?</div>
+              <div className="guide-features-mini">
+                <span><ShieldCheck size={14} /> Analyze Text</span>
+                <span><Radio size={14} /> Live Monitoring</span>
+                <span><BarChart3 size={14} /> Dashboard</span>
+                <span><FileText size={14} /> History</span>
+              </div>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><BarChart3 size={18} /> Dashboard</div>
+              <p className="guide-p">The home page shows <strong>Total Flagged</strong>, <strong>Critical Threats</strong>, severity distribution, and a bar chart of content by category. Click <strong>Refresh</strong> to update charts.</p>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><ShieldCheck size={18} /> Analyze Text</div>
+              <ol className="guide-list guide-list-num">
+                <li>Click <strong>Analyze</strong> in the sidebar</li>
+                <li>Type or paste any text into the input box</li>
+                <li>Click <strong>Analyze →</strong></li>
+                <li>Result shows: category (cyberbullying, harassment, hate speech, threat, or clean), confidence percentage, and probability bars</li>
+              </ol>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><FileText size={18} /> History</div>
+              <p className="guide-p">Shows all flagged content. Filter by category using the top buttons. Navigate pages with <strong>Prev / Next</strong>.</p>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><Radio size={18} /> Live Feed / Simulate</div>
+              <p className="guide-p">Test the system with sample social media comments. Add your own test comments, select Instagram or Facebook as the platform, and see real-time analysis.</p>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><AlertTriangle size={18} /> Understanding Results</div>
+              <div className="guide-table-wrap">
+                <table className="guide-table">
+                  <thead><tr><th>Category</th><th>Severity</th><th>Action</th></tr></thead>
+                  <tbody>
+                    <tr><td>Clean</td><td>None</td><td>Content is safe</td></tr>
+                    <tr><td>Cyberbullying</td><td>Low–Medium</td><td>Review recommended</td></tr>
+                    <tr><td>Harassment</td><td>Medium–High</td><td>Prompt review needed</td></tr>
+                    <tr><td>Hate Speech</td><td>High</td><td>Review and consider action</td></tr>
+                    <tr><td>Threat</td><td>Critical</td><td>Immediate action required</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="guide-p" style={{ marginTop: 12 }}>Confidence scores above <strong>80%</strong> are reliable. Scores 50–70% should be reviewed manually.</p>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><Globe size={18} /> Connecting Facebook / Instagram</div>
+              <p className="guide-p">Follow the <strong>Meta API Setup</strong> tab above. The app must pass Meta's App Review process for production use. Once configured, new comments are automatically analyzed and appear in the Dashboard and History.</p>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><Zap size={18} /> Limitations</div>
+              <ul className="guide-list">
+                <li>AI is not 100% accurate — always use human judgment</li>
+                <li>Sarcasm and context-dependent language can confuse the model</li>
+                <li>Best with English text (multilingual support: 14+ languages)</li>
+                <li>History is cleared on server restart unless database persistence is enabled</li>
+              </ul>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ── FAQ ──────────────────────────────────────────────── */}
