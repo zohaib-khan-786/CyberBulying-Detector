@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Shield, Sun, Moon } from "lucide-react";
 import { API_BASE } from "../config";
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, onBack }) {
   const [mode, setMode]         = useState("login");
   const [username, setUsername]   = useState("");
   const [email, setEmail]         = useState("");
@@ -70,6 +70,9 @@ export default function Login({ onLogin }) {
   return (
     <div className="login-wrapper">
       <div className="login-theme">
+        <button className="btn-ghost" onClick={onBack} title="Back to home" style={{ padding: "6px 10px", fontSize: "0.76rem" }}>
+          &larr; Home
+        </button>
         <button onClick={toggleTheme} title={dark ? "Light mode" : "Dark mode"}>
           {dark ? <Sun size={18} /> : <Moon size={18} />}
         </button>

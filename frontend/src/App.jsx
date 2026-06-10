@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { isAuthenticated, getCurrentUser, API_BASE, authFetch } from "./config";
 import Login from "./pages/Login";
+import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/Dashboard";
 import Detector from "./pages/Detector";
 import History from "./pages/History";
@@ -35,6 +36,7 @@ export default function App() {
   const [dark, setDark]              = useState(() => localStorage.getItem("theme") !== "light");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [toasts, setToasts]          = useState([]);
+  const [showLogin, setShowLogin]    = useState(false);
 
   const latestId = useRef(null);
   const toastId = useRef(0);
@@ -101,7 +103,10 @@ export default function App() {
   }
 
   if (!authed) {
-    return <Login onLogin={handleLogin} />;
+    if (showLogin) {
+      return <Login onLogin={handleLogin} onBack={() => setShowLogin(false)} />;
+    }
+    return <LandingPage onLoginClick={() => setShowLogin(true)} />;
   }
 
   const role = user?.role || "manager";
