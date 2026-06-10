@@ -76,7 +76,7 @@ export default function ModeratedUsers() {
         </div>
       ) : (
         <>
-          <div className="history-table">
+          <div className="history-table mod-table">
             <div className="history-header">
               <span>User</span>
               <span>Platform</span>
