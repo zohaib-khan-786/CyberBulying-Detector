@@ -141,7 +141,7 @@ export default function LandingPage({ onLoginClick }) {
         <div className="landing-nav-inner">
           <a href="#" className="landing-logo">
             <div className="landing-logo-icon"><Shield size={22} strokeWidth={1.8} /></div>
-            <span>AI-Powered</span>
+            <span>AI-Powered Cyberbullying Detection</span>
           </a>
           <div className={`landing-nav-links ${mobileNavOpen ? "open" : ""}`}>
             <a href="#features" onClick={() => setMobileNavOpen(false)}>Features</a>
@@ -168,7 +168,7 @@ export default function LandingPage({ onLoginClick }) {
         <div className="landing-hero-glow" />
         <div className="landing-hero-content">
           <div className="landing-badge" ref={heroBadgeRef}>
-            <Sparkles size={14} /> AI-Powered Content Moderation
+            <Sparkles size={14} /> AI-Powered Cyberbullying Detection
           </div>
           <h1 className="landing-hero-title" ref={heroTitleRef}>
             Protect Your Community<br />
@@ -512,12 +512,13 @@ export default function LandingPage({ onLoginClick }) {
         <div className="landing-footer-inner">
           <div className="landing-footer-brand">
             <div className="landing-logo-icon"><Shield size={18} strokeWidth={1.8} /></div>
-            <span>AI-Powered</span>
+<span>AI-Powered Cyberbullying Detection</span>
           </div>
           <div className="landing-footer-links">
-            <a href="#">Privacy Policy</a>
-            <a href="#">Terms of Service</a>
-            <a href="mailto:hello@cyberguard.dev">Contact</a>
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#faq">FAQ</a>
+            <a href="mailto:hello@aicyberbullying.dev">Contact</a>
           </div>
           <p>&copy; 2026 AI-Powered Cyberbullying Detection. All rights reserved. Made with care for safer communities.</p>
         </div>
