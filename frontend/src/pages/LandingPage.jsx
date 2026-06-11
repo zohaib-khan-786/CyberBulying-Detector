@@ -126,9 +126,9 @@ export default function LandingPage({ onLoginClick }) {
   ];
 
   const faqs = [
-    { q: "What platforms does CyberGuard support?", a: "CyberGuard currently supports Facebook Pages and Instagram business accounts through the Meta Graph API. We're actively working on Twitter/X, YouTube, and Discord integrations." },
+    { q: "What platforms does the app support?", a: "The app currently supports Facebook Pages and Instagram business accounts through the Meta Graph API. We're actively working on Twitter/X, YouTube, and Discord integrations." },
     { q: "How accurate is the AI detection?", a: "Our models achieve 94-97% accuracy across supported languages. We use an ensemble of fine-tuned transformer models including DistilBERT and specialized multilingual classifiers." },
-    { q: "Can I use it for multiple pages?", a: "Yes. CyberGuard supports multi-tenant architecture. Add multiple Facebook/Instagram pages, assign them to different workspaces, and manage everything from one dashboard." },
+    { q: "Can I use it for multiple pages?", a: "Yes. The app supports multi-tenant architecture. Add multiple Facebook/Instagram pages, assign them to different workspaces, and manage everything from one dashboard." },
     { q: "Is my data secure?", a: "Absolutely. All data is encrypted in transit and at rest. Role-based access control ensures only authorized team members can view sensitive content. We never share your data with third parties." },
     { q: "What languages are supported?", a: "Our multilingual model supports 14+ languages including English, Arabic, Hindi, French, German, Spanish, Urdu, and more. Language is auto-detected and the best model is used." },
     { q: "How do I get started?", a: "Create an account, connect your Meta/Facebook pages via the Meta API setup guide, and the AI starts monitoring immediately. The entire setup takes about 10 minutes." },
@@ -141,7 +141,7 @@ export default function LandingPage({ onLoginClick }) {
         <div className="landing-nav-inner">
           <a href="#" className="landing-logo">
             <div className="landing-logo-icon"><Shield size={22} strokeWidth={1.8} /></div>
-            <span>CyberGuard</span>
+            <span>AI-Powered</span>
           </a>
           <div className={`landing-nav-links ${mobileNavOpen ? "open" : ""}`}>
             <a href="#features" onClick={() => setMobileNavOpen(false)}>Features</a>
@@ -175,7 +175,7 @@ export default function LandingPage({ onLoginClick }) {
             <span className="gradient-text">with Intelligent Detection</span>
           </h1>
           <p className="landing-hero-sub" ref={heroSubRef}>
-            CyberGuard uses advanced AI to automatically detect cyberbullying, harassment, and hate speech 
+            AI-Powered Cyberbullying Detection uses advanced AI to automatically detect cyberbullying, harassment, and hate speech 
             across your social platforms. Real-time monitoring, actionable insights, and multi-language support.
           </p>
           <div className="landing-hero-actions" ref={heroActionsRef}>
@@ -299,7 +299,7 @@ export default function LandingPage({ onLoginClick }) {
       <section id="guide" className="landing-section landing-section-alt" ref={guideRef}>
         <div className="landing-section-header">
           <h2>Complete<br /><span className="gradient-text">Guide &amp; Setup</span></h2>
-          <p>Everything you need to get CyberGuard up and running with your social platforms.</p>
+          <p>Everything you need to get the app up and running with your social platforms.</p>
         </div>
 
         <div className="guide-tabs">
@@ -337,7 +337,7 @@ export default function LandingPage({ onLoginClick }) {
               <ol className="guide-list guide-list-num">
                 <li>Go to <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener">developers.facebook.com/apps</a></li>
                 <li>Click <strong>"Create App"</strong> and select <strong>"Business"</strong> as the app type</li>
-                <li>Name it <strong>CyberGuard</strong> and complete the security check</li>
+                <li>Name it <strong>AI-Powered Cyberbullying Detection</strong> and complete the security check</li>
               </ol>
             </div>
 
@@ -406,7 +406,7 @@ export default function LandingPage({ onLoginClick }) {
         {guideTab === "user" && (
           <div className="guide-content">
             <div className="guide-card">
-              <div className="guide-card-header"><BookOpen size={18} /> What Can CyberGuard Do?</div>
+              <div className="guide-card-header"><BookOpen size={18} /> What Can the App Do?</div>
               <div className="guide-features-mini">
                 <span><ShieldCheck size={14} /> Analyze Text</span>
                 <span><Radio size={14} /> Live Monitoring</span>
@@ -512,14 +512,14 @@ export default function LandingPage({ onLoginClick }) {
         <div className="landing-footer-inner">
           <div className="landing-footer-brand">
             <div className="landing-logo-icon"><Shield size={18} strokeWidth={1.8} /></div>
-            <span>CyberGuard</span>
+            <span>AI-Powered</span>
           </div>
           <div className="landing-footer-links">
             <a href="#">Privacy Policy</a>
             <a href="#">Terms of Service</a>
             <a href="mailto:hello@cyberguard.dev">Contact</a>
           </div>
-          <p>&copy; 2026 CyberGuard. All rights reserved. Made with care for safer communities.</p>
+          <p>&copy; 2026 AI-Powered Cyberbullying Detection. All rights reserved. Made with care for safer communities.</p>
         </div>
       </footer>
     </div>
