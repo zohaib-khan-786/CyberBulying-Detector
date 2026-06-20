@@ -374,23 +374,50 @@ export default function LandingPage({ onLoginClick }) {
             </div>
 
             <div className="guide-card">
-              <div className="guide-card-header"><Radio size={18} /> 6. Set Up Webhooks</div>
+              <div className="guide-card-header"><Radio size={18} /> 6. Set Up Webhooks — App Level</div>
+              <p className="guide-p">Configure the webhook in your Meta App so it can receive events from Facebook:</p>
               <ol className="guide-list guide-list-num">
-                <li>Run <code>ngrok http 5000</code> to get a public HTTPS URL</li>
+                <li>Run <code>ngrok http 5000</code> to get a public HTTPS URL (for local dev)</li>
                 <li>Go to <strong>Products &gt; Webhooks</strong> in your app dashboard</li>
+                <li>Click <strong>"Add Subscription"</strong> next to <strong>Page</strong></li>
                 <li><strong>Callback URL:</strong> <code>https://your-ngrok-url.ngrok-free.dev/api/webhook/meta</code></li>
-                <li><strong>Verify Token:</strong> Set <code>META_WEBHOOK_VERIFY_TOKEN</code> in <code>.env</code> (any string)</li>
-                <li>Subscribe to webhook fields: <code>feed</code>, <code>messages</code></li>
+                <li><strong>Verify Token:</strong> Any custom string (e.g. <code>my_verify_token</code>) — must match your <code>.env</code> setting</li>
+                <li>Click <strong>"Verify and Save"</strong> — you should see a green checkmark</li>
+                <li>Under <strong>Subscription Fields</strong>, subscribe to: <code>feed</code></li>
+                <li>Click <strong>"Save"</strong> on the field selection</li>
               </ol>
               <div className="guide-note">
-                <strong>Critical:</strong> Subscribe your Page to the app via:<br />
-                <code>curl -X POST "https://graph.facebook.com/v25.0/YOUR_PAGE_ID/subscribed_apps" -d "subscribed_fields=feed,messages" -d "access_token=YOUR_TOKEN"</code>
-                <br />Without this, <strong>no events will arrive</strong>.
+                <strong>Tip:</strong> For production (Cloud Run), use your live URL instead of ngrok:
+                <code>https://your-app.run.app/api/webhook/meta</code>
               </div>
             </div>
 
             <div className="guide-card">
-              <div className="guide-card-header"><CheckCircle2 size={18} /> 7. Configure .env &amp; Test</div>
+              <div className="guide-card-header"><Radio size={18} /> 7. Set Up Webhooks — Page Level</div>
+              <p className="guide-p">The App-level webhook only tells Meta <em>"this app can receive events"</em>. You must also tell your Page <em>"send events to this app"</em>. Without this step, <strong>no real-time comments will arrive</strong>.</p>
+              <p className="guide-p"><strong>Option A — Via App Dashboard (easiest):</strong></p>
+              <ol className="guide-list guide-list-num">
+                <li>Still in <strong>Products &gt; Webhooks</strong>, click the <strong>"Page"</strong> tab</li>
+                <li>Scroll to <strong>"Page Subscriptions"</strong> section</li>
+                <li>Find your page and click <strong>"Manage"</strong></li>
+                <li>Confirm the fields include <code>feed</code></li>
+              </ol>
+              <p className="guide-p"><strong>Option B — Via API (curl):</strong></p>
+              <div className="guide-code-block">
+                <code>curl -X POST "https://graph.facebook.com/v25.0/YOUR_PAGE_ID/subscribed_apps" \<br />
+                &nbsp;&nbsp;-d "subscribed_fields=feed" \<br />
+                &nbsp;&nbsp;-d "access_token=YOUR_PAGE_ACCESS_TOKEN"</code>
+              </div>
+              <div className="guide-warning">
+                <strong>⚠️ Both levels required.</strong><br />
+                • <strong>App Level</strong> &mdash; tells Meta your app can handle webhooks<br />
+                • <strong>Page Level</strong> &mdash; tells your page to send events to your app<br />
+                If comments aren't appearing, the Page subscription is usually the missing piece.
+              </div>
+            </div>
+
+            <div className="guide-card">
+              <div className="guide-card-header"><CheckCircle2 size={18} /> 8. Configure .env &amp; Test</div>
               <div className="guide-env-block">
                 <code>META_APP_ID=your_app_id</code><br />
                 <code>META_APP_SECRET=your_app_secret</code><br />

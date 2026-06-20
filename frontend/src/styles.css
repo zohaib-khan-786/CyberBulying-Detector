@@ -594,6 +594,29 @@
   font-size: 0.75rem;
   color: #EAB308;
 }
+.guide-warning {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: #FCA5A5;
+  line-height: 1.7;
+}
+.guide-code-block {
+  background: rgba(0,0,0,0.15);
+  padding: 12px 14px;
+  border-radius: 8px;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+.guide-code-block code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  color: #38BDF8;
+  line-height: 1.7;
+}
 .guide-env-block {
   background: rgba(0,0,0,0.15);
   padding: 14px 16px;

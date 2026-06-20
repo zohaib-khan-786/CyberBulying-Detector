@@ -43,14 +43,14 @@ def create_app() -> Flask:
     init_db()
     logger.info("Database initialised.")
 
-    # ── Classifier (loads async so gunicorn starts immediately) ───────────────
+    # ── Classifier ────────────────────────────────────────────────────────────
     use_transformer = os.getenv("USE_TRANSFORMER", "false").lower() == "true"
     classifier = CyberbullyingClassifier(use_transformer=use_transformer)
     app.config["CLASSIFIER"] = classifier
     app.config["MODEL_LOADED"] = False
 
+    # Load model in background thread so gunicorn starts immediately
     def _load_model():
-        """Background model loading — doesn't block startup."""
         try:
             classifier.load()
             app.config["MODEL_LOADED"] = True
@@ -58,8 +58,7 @@ def create_app() -> Flask:
         except Exception as e:
             logger.error("Model loading failed: %s", e)
 
-    thread = threading.Thread(target=_load_model, daemon=True)
-    thread.start()
+    threading.Thread(target=_load_model, daemon=True).start()
 
     # ── Default super_admin user + tenant ──────────────────────────────────────
     _ensure_default_tenant()
