@@ -319,7 +319,6 @@ export default function LandingPage({ onLoginClick }) {
                 <li>Personal Facebook account</li>
                 <li>A Facebook Page you own or manage</li>
                 <li>Meta Developer Account (free)</li>
-                <li>ngrok installed (for local webhook testing)</li>
               </ul>
             </div>
 
@@ -347,7 +346,7 @@ export default function LandingPage({ onLoginClick }) {
                 <li>Go to <strong>Settings &gt; Basic</strong> in your app dashboard</li>
                 <li>Copy the <strong>App ID</strong> (visible immediately)</li>
                 <li>Click <strong>"Show"</strong> to reveal the <strong>App Secret</strong> (enter your Facebook password)</li>
-                <li>Add both to your <code>.env</code> file as <code>META_APP_ID</code> and <code>META_APP_SECRET</code></li>
+                <li>Enter both into the dashboard <strong>Settings &gt; Meta API</strong> page</li>
               </ol>
             </div>
 
@@ -361,7 +360,7 @@ export default function LandingPage({ onLoginClick }) {
                 <li>Grant permissions: <code>pages_show_list</code>, <code>pages_read_engagement</code>, <code>pages_manage_posts</code>, <code>pages_manage_metadata</code>, <code>pages_read_user_content</code>, <code>pages_manage_engagement</code></li>
                 <li>Click <strong>"Generate Token"</strong> and copy it immediately</li>
               </ol>
-              <p className="guide-p">This is your <strong>long-lived Page Access Token</strong>. Set it as <code>META_PAGE_ACCESS_TOKEN</code> in <code>.env</code>.</p>
+              <p className="guide-p">Paste this token into the dashboard <strong>Settings &gt; Meta API</strong> page.</p>
             </div>
 
             <div className="guide-card">
@@ -369,7 +368,7 @@ export default function LandingPage({ onLoginClick }) {
               <ol className="guide-list guide-list-num">
                 <li>Go to your Facebook Page &gt; <strong>"About"</strong> &gt; scroll to <strong>"Page Transparency"</strong></li>
                 <li>Copy the <strong>Page ID</strong> (a numeric value like <code>972933332575020</code>)</li>
-                <li>Set it as <code>META_PAGE_ID</code> in your <code>.env</code> file</li>
+                <li>Enter it into the dashboard <strong>Settings &gt; Meta API</strong> page</li>
               </ol>
             </div>
 
@@ -377,19 +376,14 @@ export default function LandingPage({ onLoginClick }) {
               <div className="guide-card-header"><Radio size={18} /> 6. Set Up Webhooks — App Level</div>
               <p className="guide-p">Configure the webhook in your Meta App so it can receive events from Facebook:</p>
               <ol className="guide-list guide-list-num">
-                <li>Run <code>ngrok http 5000</code> to get a public HTTPS URL (for local dev)</li>
                 <li>Go to <strong>Products &gt; Webhooks</strong> in your app dashboard</li>
                 <li>Click <strong>"Add Subscription"</strong> next to <strong>Page</strong></li>
-                <li><strong>Callback URL:</strong> <code>https://your-ngrok-url.ngrok-free.dev/api/webhook/meta</code></li>
-                <li><strong>Verify Token:</strong> Any custom string (e.g. <code>my_verify_token</code>) — must match your <code>.env</code> setting</li>
+                <li><strong>Callback URL:</strong> <code>https://cyberguard-634541519354.asia-southeast1.run.app/api/webhook/meta</code></li>
+                <li><strong>Verify Token:</strong> Any custom string (e.g. <code>my_verify_token</code>) — enter the same token in dashboard <strong>Settings &gt; Meta API</strong></li>
                 <li>Click <strong>"Verify and Save"</strong> — you should see a green checkmark</li>
                 <li>Under <strong>Subscription Fields</strong>, subscribe to: <code>feed</code></li>
                 <li>Click <strong>"Save"</strong> on the field selection</li>
               </ol>
-              <div className="guide-note">
-                <strong>Tip:</strong> For production (Cloud Run), use your live URL instead of ngrok:
-                <code>https://your-app.run.app/api/webhook/meta</code>
-              </div>
             </div>
 
             <div className="guide-card">
@@ -417,15 +411,8 @@ export default function LandingPage({ onLoginClick }) {
             </div>
 
             <div className="guide-card">
-              <div className="guide-card-header"><CheckCircle2 size={18} /> 8. Configure .env &amp; Test</div>
-              <div className="guide-env-block">
-                <code>META_APP_ID=your_app_id</code><br />
-                <code>META_APP_SECRET=your_app_secret</code><br />
-                <code>META_PAGE_ID=your_page_id</code><br />
-                <code>META_PAGE_ACCESS_TOKEN=your_token</code><br />
-                <code>META_WEBHOOK_VERIFY_TOKEN=your_verify_string</code>
-              </div>
-              <p className="guide-p">Test by commenting on your Page from a <strong>different Facebook account</strong> — admin self-comments are ignored by Meta.</p>
+              <div className="guide-card-header"><CheckCircle2 size={18} /> 8. Test It</div>
+              <p className="guide-p">Post a comment on your Facebook Page from a <strong>different Facebook account</strong> — admin self-comments are ignored by Meta. The comment should appear in your dashboard within seconds.</p>
             </div>
           </div>
         )}
