@@ -1,0 +1,3 @@
+FROM zohaibkhan123/cyberguard:latest
+COPY frontend/dist /usr/share/nginx/html
+COPY backend/app.py /app/backend/app.py

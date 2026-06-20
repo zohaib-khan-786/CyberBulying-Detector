@@ -41,3 +41,7 @@ Thumbs.db
 
 # Session checkpoint
 SESSION_CHECKPOINT*
+
+# Temp scripts
+update_password.py
+memory-data/

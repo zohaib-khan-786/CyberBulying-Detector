@@ -5,6 +5,7 @@ Entry point for the REST API server.
 
 import os
 import logging
+import threading
 from pathlib import Path
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
@@ -42,11 +43,23 @@ def create_app() -> Flask:
     init_db()
     logger.info("Database initialised.")
 
-    # ── Classifier ────────────────────────────────────────────────────────────
+    # ── Classifier (loads async so gunicorn starts immediately) ───────────────
     use_transformer = os.getenv("USE_TRANSFORMER", "false").lower() == "true"
     classifier = CyberbullyingClassifier(use_transformer=use_transformer)
-    classifier.load()
     app.config["CLASSIFIER"] = classifier
+    app.config["MODEL_LOADED"] = False
+
+    def _load_model():
+        """Background model loading — doesn't block startup."""
+        try:
+            classifier.load()
+            app.config["MODEL_LOADED"] = True
+            logger.info("Model loading completed in background.")
+        except Exception as e:
+            logger.error("Model loading failed: %s", e)
+
+    thread = threading.Thread(target=_load_model, daemon=True)
+    thread.start()
 
     # ── Default super_admin user + tenant ──────────────────────────────────────
     _ensure_default_tenant()
@@ -85,7 +98,7 @@ def create_app() -> Flask:
     def health():
         return jsonify({
             "status":       "ok",
-            "model_loaded": classifier.is_loaded,
+            "model_loaded": app.config.get("MODEL_LOADED", False),
             "model_type":   "transformer" if use_transformer else "sklearn",
             "version":      "2.0.0",
         })
