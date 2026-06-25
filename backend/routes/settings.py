@@ -80,14 +80,27 @@ def update_meta_credentials():
     try:
         creds = _ensure_creds(db)
 
+        if "page_id" in data:
+            new_page_id = str(data["page_id"]).strip()
+            # Enforce: one page can only belong to one active tenant
+            existing = db.query(MetaCredentials).filter(
+                MetaCredentials.page_id == new_page_id,
+                MetaCredentials.is_active == True,
+                MetaCredentials.tenant_id != g.current_user.tenant_id,
+            ).first()
+            if existing:
+                return jsonify({
+                    "error": f"Page '{new_page_id}' is already registered to another tenant. "
+                              "A page can only be owned by one tenant."
+                }), 409
+            creds.page_id = new_page_id
+
         if "app_id" in data:
             creds.app_id = data["app_id"]
         if "app_secret" in data:
             creds.app_secret = data["app_secret"]
         if "page_access_token" in data:
             creds.page_access_token = data["page_access_token"]
-        if "page_id" in data:
-            creds.page_id = data["page_id"]
         if "webhook_verify_token" in data:
             creds.webhook_verify_token = data["webhook_verify_token"]
 

@@ -273,9 +273,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="page">
-          {pages[activePage]}
-        </div>
+        {pages[activePage]}
       </main>
 
       <header className="mobile-header">

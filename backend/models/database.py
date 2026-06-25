@@ -17,7 +17,7 @@ from pathlib import Path
 
 from sqlalchemy import (
     Boolean, Column, DateTime, Float, ForeignKey, Integer,
-    String, Text, create_engine, event, pool,
+    Index, String, Text, create_engine, event, pool, text as sqla_text,
 )
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker, relationship
 
@@ -64,6 +64,12 @@ class Tenant(Base):
 class MetaCredentials(Base):
     """Per-tenant Meta API credentials (encrypted at rest in production)."""
     __tablename__ = "meta_credentials"
+
+    # One page can only be owned by one active tenant (enforced at DB level)
+    __table_args__ = (
+        Index("ix_meta_creds_unique_active_page", "page_id", unique=True,
+              postgresql_where=sqla_text("is_active = true")),
+    )
 
     id                    = Column(Integer,  primary_key=True, autoincrement=True)
     tenant_id             = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
@@ -206,3 +212,19 @@ def get_db() -> Session:
 def init_db():
     """Create all tables if they don't exist — uses raw SQL for true idempotency."""
     Base.metadata.create_all(bind=engine, checkfirst=True)
+
+    # Create partial unique index: one page can only be owned by one active tenant
+    # CREATE INDEX IF NOT EXISTS requires PostgreSQL 9.5+ / SQLite 3.8+
+    with engine.connect() as conn:
+        dialect = conn.dialect.name
+        if dialect == "postgresql":
+            conn.execute(sqla_text("""
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_meta_creds_unique_active_page
+                ON meta_credentials (page_id) WHERE is_active = true
+            """))
+        elif dialect == "sqlite":
+            conn.execute(sqla_text("""
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_meta_creds_unique_active_page
+                ON meta_credentials (page_id) WHERE is_active
+            """))
+        conn.commit()

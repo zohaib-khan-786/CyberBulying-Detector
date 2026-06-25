@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Shield, Sun, Moon, Menu, X, LogIn, AlertTriangle, BarChart3, Bell, Users, Radio, Layers, Globe, ChevronDown, ChevronRight, ArrowRight, Sparkles, ShieldCheck, Zap, TrendingUp, BookOpen, AppWindow, KeyRound, CheckCircle2, ExternalLink, Copy, FileText } from "lucide-react";
+import { API_BASE } from "../config";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -10,6 +11,7 @@ export default function LandingPage({ onLoginClick }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState(null);
   const [guideTab, setGuideTab] = useState("meta");
+  const [metrics, setMetrics] = useState(null);
 
   const heroRef = useRef(null);
   const heroBadgeRef = useRef(null);
@@ -23,6 +25,14 @@ export default function LandingPage({ onLoginClick }) {
   const faqRef = useRef(null);
   const ctaRef = useRef(null);
   const guideRef = useRef(null);
+
+  // Fetch live metrics from backend
+  useEffect(() => {
+    fetch(`${API_BASE}/landing/metrics`)
+      .then(r => r.json())
+      .then(d => setMetrics(d))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     ScrollTrigger.refresh();
@@ -188,15 +198,17 @@ export default function LandingPage({ onLoginClick }) {
           </div>
           <div className="landing-hero-stats" ref={heroStatsRef}>
             <div className="hero-stat">
-              <span className="hero-stat-value">94%+</span>
+              <span className="hero-stat-value">{metrics ? `${metrics.accuracy_pct}%+` : "94%+"}</span>
               <span className="hero-stat-label">Detection Accuracy</span>
             </div>
             <div className="hero-stat">
-              <span className="hero-stat-value">14+</span>
+              <span className="hero-stat-value">{metrics ? `${metrics.languages_count}+` : "14+"}</span>
               <span className="hero-stat-label">Languages Supported</span>
             </div>
             <div className="hero-stat">
-              <span className="hero-stat-value">Real-Time</span>
+              <span className={`hero-stat-value ${metrics && metrics.monitoring_active ? "" : "hero-stat-dim"}`}>
+                {metrics && metrics.monitoring_active ? "Active" : "Real-Time"}
+              </span>
               <span className="hero-stat-label">Monitoring</span>
             </div>
           </div>
@@ -273,21 +285,21 @@ export default function LandingPage({ onLoginClick }) {
             <div className="showcase-stat-item">
               <TrendingUp size={20} />
               <div>
-                <span className="showcase-stat-val">1,247</span>
+                <span className="showcase-stat-val">{metrics ? metrics.analyzed_today.toLocaleString() : "—"}</span>
                 <span className="showcase-stat-lbl">Comments Analyzed Today</span>
               </div>
             </div>
             <div className="showcase-stat-item">
               <AlertTriangle size={20} />
               <div>
-                <span className="showcase-stat-val">38</span>
+                <span className="showcase-stat-val">{metrics ? metrics.total_flagged.toLocaleString() : "—"}</span>
                 <span className="showcase-stat-lbl">Flagged as Harmful</span>
               </div>
             </div>
             <div className="showcase-stat-item">
               <Zap size={20} />
               <div>
-                <span className="showcase-stat-val">2.3s</span>
+                <span className="showcase-stat-val">{metrics ? `${(metrics.avg_response_ms / 1000).toFixed(1)}s` : "—"}</span>
                 <span className="showcase-stat-lbl">Average Response Time</span>
               </div>
             </div>

@@ -19,6 +19,8 @@ from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Any, Dict, List, cast
 
+import re
+
 from models.lang_detector import detect_language, get_model_for_language
 
 logger = logging.getLogger(__name__)
@@ -575,8 +577,12 @@ class CyberbullyingClassifier:
             "ketzer", "ungläubiger", "gotteslästerung",
         }
         lower = text.lower()
-        religious_hit = any(w in lower for w in _RELIGIOUS_WORDS)
-        toxic_hit     = any(w in lower for w in _TOXIC_WORDS)
+
+        def _contains_word(text: str, word: str) -> bool:
+            return bool(re.search(r'\b' + re.escape(word) + r'\b', text))
+
+        religious_hit = any(_contains_word(lower, w) for w in _RELIGIOUS_WORDS)
+        toxic_hit     = any(_contains_word(lower, w) for w in _TOXIC_WORDS)
 
         trigger_words = []
         if religious_hit:
@@ -584,7 +590,7 @@ class CyberbullyingClassifier:
             label_id = 5
             confidence = 0.72
             for w in sorted(_RELIGIOUS_WORDS, key=len, reverse=True):
-                if w in lower:
+                if _contains_word(lower, w):
                     trigger_words.append(w)
                     if len(trigger_words) >= 10:
                         break
@@ -597,7 +603,7 @@ class CyberbullyingClassifier:
             label_id = 1
             confidence = 0.75
             for w in sorted(_TOXIC_WORDS, key=len, reverse=True):
-                if w in lower:
+                if _contains_word(lower, w):
                     trigger_words.append(w)
                     if len(trigger_words) >= 10:
                         break
