@@ -10,6 +10,7 @@ build/
 
 # Secrets
 .env
+.env.local
 *.key
 *.pem
 
