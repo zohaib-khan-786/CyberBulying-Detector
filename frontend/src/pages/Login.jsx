@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Shield, Sun, Moon, Activity, ShieldAlert, BarChart3 } from "lucide-react";
+import { Shield, Sun, Moon, Activity, ShieldAlert, BarChart3, MessageSquare, AlertTriangle, Clock, CheckCircle2 } from "lucide-react";
 import { API_BASE } from "../config";
 
 export default function Login({ onLogin, onBack }) {
@@ -199,6 +199,37 @@ export default function Login({ onLogin, onBack }) {
               </div>
             </div>
           </div>
+
+          {/* Live preview card */}
+          <div className="login-preview">
+            <div className="login-preview-header">
+              <span className="login-preview-dot" style={{ background: "#22C55E" }}></span>
+              <span>Live Monitoring</span>
+            </div>
+            <div className="login-preview-stats">
+              <div className="login-preview-stat">
+                <MessageSquare size={14} />
+                <span className="login-preview-val">1,284</span>
+                <span className="login-preview-label">Comments today</span>
+              </div>
+              <div className="login-preview-stat">
+                <AlertTriangle size={14} />
+                <span className="login-preview-val">47</span>
+                <span className="login-preview-label">Flagged</span>
+              </div>
+              <div className="login-preview-stat">
+                <CheckCircle2 size={14} />
+                <span className="login-preview-val">96%</span>
+                <span className="login-preview-label">Accuracy</span>
+              </div>
+              <div className="login-preview-stat">
+                <Clock size={14} />
+                <span className="login-preview-val">230ms</span>
+                <span className="login-preview-label">Response</span>
+              </div>
+            </div>
+          </div>
+
           <p className="login-footer-text">
             Already have an account? <button className="login-text-link" onClick={() => { setMode("login"); setError(""); }}>Sign in</button>
           </p>

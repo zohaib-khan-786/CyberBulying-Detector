@@ -2783,12 +2783,12 @@ textarea { min-height: 80px; resize: vertical; }
 
 /* ── Left column: login card ────────────── */
 .login-card-col {
-  width: 440px;
-  min-width: 440px;
+  width: 520px;
+  min-width: 520px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 40px 32px 40px 48px;
+  padding: 40px 56px 40px 64px;
   position: relative;
   z-index: 1;
 }
@@ -2907,6 +2907,61 @@ textarea { min-height: 80px; resize: vertical; }
 }
 .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* ── Live preview card ──────────────────── */
+.login-preview {
+  margin-top: 28px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+}
+.login-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  letter-spacing: 0.01em;
+}
+.login-preview-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.login-preview-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.login-preview-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+.login-preview-stat svg {
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+.login-preview-val {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.login-preview-label {
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
 .login-footer-text {
   font-size: 0.82rem;
   color: var(--text-muted);
@@ -2929,8 +2984,8 @@ textarea { min-height: 80px; resize: vertical; }
   flex: 1;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  padding: 40px 60px 40px 60px;
+  justify-content: center;
+  padding: 40px 60px 40px 40px;
   position: relative;
   overflow: hidden;
 }
@@ -2961,6 +3016,7 @@ textarea { min-height: 80px; resize: vertical; }
   position: relative;
   z-index: 1;
   max-width: 480px;
+  width: 100%;
 }
 
 .login-brand-logo {
@@ -3027,6 +3083,13 @@ textarea { min-height: 80px; resize: vertical; }
 }
 
 /* ── Login responsive ───────────────────── */
+@media (max-width: 1050px) {
+  .login-card-col {
+    width: 460px;
+    min-width: 460px;
+    padding: 40px 40px 40px 48px;
+  }
+}
 @media (max-width: 900px) {
   .login-wrapper { flex-direction: column; }
   .login-card-col {
