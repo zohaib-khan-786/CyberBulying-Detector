@@ -10,6 +10,7 @@ Set DATABASE_URL in .env to swap in MySQL or PostgreSQL:
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -211,7 +212,19 @@ def get_db() -> Session:
 
 def init_db():
     """Create all tables if they don't exist — uses raw SQL for true idempotency."""
-    Base.metadata.create_all(bind=engine, checkfirst=True)
+    try:
+        Base.metadata.create_all(bind=engine, checkfirst=True)
+    except Exception:
+        # Race condition when multiple gunicorn workers start simultaneously:
+        # worker-1 and worker-2 both see "table doesn't exist", both try to
+        # CREATE TABLE, and the second hits pg_class unique constraint.
+        # Safe to ignore — if tables are missing they'll be created on next boot.
+        logger = logging.getLogger(__name__)
+        logger.warning("init_db race on create_all (safe to ignore, retrying)...")
+        try:
+            Base.metadata.create_all(bind=engine, checkfirst=True)
+        except Exception as e:
+            logger.warning("init_db create_all still failed (will retry on next boot): %s", e)
 
     # Create partial unique index: one page can only be owned by one active tenant
     # CREATE INDEX IF NOT EXISTS requires PostgreSQL 9.5+ / SQLite 3.8+
